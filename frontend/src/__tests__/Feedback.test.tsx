@@ -139,3 +139,109 @@ describe("spec 004 US1: rate an answer", () => {
     expect(pressed("Helpful")).toBe("true");
   });
 });
+
+describe("spec 004 US2: say why an answer was not helpful", () => {
+  async function rateDown() {
+    await renderApp();
+    const id = await chat("hello");
+    fireEvent.click(screen.getByRole("button", { name: "Not helpful" }));
+    await waitFor(() => expect(pressed("Not helpful")).toBe("true"));
+    return id;
+  }
+  const comment = () => screen.getByRole("textbox", { name: "Comment" }) as HTMLTextAreaElement;
+
+  it("offers the four reasons, a comment box and Send after Not helpful", async () => {
+    await rateDown();
+    const reasons = within(screen.getByRole("radiogroup", { name: "Reason" }));
+    expect(reasons.getAllByRole("radio").map((r) => r.textContent)).toEqual([
+      "Incorrect",
+      "Unclear",
+      "I wanted a person",
+      "Other",
+    ]);
+    expect(comment()).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send feedback" })).toBeTruthy();
+  });
+
+  it("sends the chosen reason with the rating, then closes and thanks the customer", async () => {
+    await rateDown();
+    fireEvent.click(screen.getByRole("radio", { name: "Unclear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await screen.findByText("Thanks for your feedback");
+    expect(lastFeedback()!.body).toEqual({ rating: "down", reason: "unclear" });
+    expect(screen.queryByRole("radiogroup", { name: "Reason" })).toBeNull();
+    expect(pressed("Not helpful")).toBe("true");
+  });
+
+  it("sends a comment exactly as typed, with the reason", async () => {
+    await rateDown();
+    fireEvent.click(screen.getByRole("radio", { name: "Incorrect" }));
+    fireEvent.change(comment(), { target: { value: "  The limit is wrong.  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await screen.findByText("Thanks for your feedback");
+    expect(lastFeedback()!.body).toEqual({ rating: "down", reason: "incorrect", comment: "  The limit is wrong.  " });
+  });
+
+  it("lets a Helpful rating add a comment, with no reasons", async () => {
+    await renderApp();
+    await chat("hello");
+    fireEvent.click(screen.getByRole("button", { name: "Helpful" }));
+    await waitFor(() => expect(pressed("Helpful")).toBe("true"));
+    fireEvent.click(screen.getByRole("button", { name: "Add a comment" }));
+    expect(screen.queryByRole("radiogroup", { name: "Reason" })).toBeNull();
+    fireEvent.change(comment(), { target: { value: "Clear, thanks" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await screen.findByText("Thanks for your feedback");
+    expect(lastFeedback()!.body).toEqual({ rating: "up", comment: "Clear, thanks" });
+  });
+
+  it("does not send a whitespace-only comment", async () => {
+    await rateDown();
+    fireEvent.change(comment(), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await screen.findByText("Thanks for your feedback");
+    expect(lastFeedback()!.body).toEqual({ rating: "down" });
+  });
+
+  it("limits the comment to 1000 characters and shows how many are left", async () => {
+    await rateDown();
+    expect(comment().maxLength).toBe(1000);
+    expect(screen.getByText("1000 characters left")).toBeTruthy();
+    fireEvent.change(comment(), { target: { value: "abcde" } });
+    expect(screen.getByText("995 characters left")).toBeTruthy();
+  });
+
+  it("keeps the plain rating and sends nothing more when the follow-up is closed", async () => {
+    await rateDown();
+    const before = feedbackPosts().length;
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("radiogroup", { name: "Reason" })).toBeNull();
+    expect(feedbackPosts()).toHaveLength(before);
+    expect(pressed("Not helpful")).toBe("true");
+  });
+
+  it("keeps the follow-up open with Retry when sending it fails", async () => {
+    await rateDown();
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+    server.failFeedback = true;
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Couldn't save your feedback");
+    expect(screen.getByRole("radiogroup", { name: "Reason" })).toBeTruthy();
+    expect(screen.queryByText("Thanks for your feedback")).toBeNull();
+
+    server.failFeedback = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(lastFeedback()!.body).toEqual({ rating: "down", reason: "other" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  });
+
+  it("records 'I wanted a person' as a reason only", async () => {
+    await rateDown();
+    const before = server.calls.length;
+    fireEvent.click(screen.getByRole("radio", { name: "I wanted a person" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await screen.findByText("Thanks for your feedback");
+    expect(lastFeedback()!.body).toEqual({ rating: "down", reason: "wanted_a_person" });
+    expect(server.calls.slice(before).map((c) => c.url)).toEqual([lastFeedback()!.url]);
+  });
+});
