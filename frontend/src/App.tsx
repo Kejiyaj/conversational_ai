@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpIcon, MenuIcon } from "lucide-react";
 
-import { getHistory, listSessions, sendMessage, type SessionSummary } from "./api";
+import { getHistory, listSessions, sendMessage, submitFeedback, type Feedback, type SessionSummary } from "./api";
 import { getSessionIds, rememberSession } from "./sessionStore";
+import FeedbackBar, { type FeedbackState } from "./FeedbackBar";
 import Sidebar from "./Sidebar";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
-import { Message as MessageRow, MessageContent } from "@/components/ui/message";
+import { Message as MessageRow, MessageContent, MessageFooter } from "@/components/ui/message";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -18,7 +19,8 @@ import {
 } from "@/components/ui/message-scroller";
 
 // `failed` marks the "Something went wrong." reply so it gets the error style (view only, never sent).
-type Message = { role: "user" | "assistant"; text: string; failed?: boolean };
+// `id` is the backend message id; replies with one can be rated (spec 004).
+type Message = { id?: number; role: "user" | "assistant"; text: string; failed?: boolean };
 type SidebarError = { message: string; retry: () => void };
 
 export default function App() {
@@ -30,6 +32,9 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sidebarError, setSidebarError] = useState<SidebarError | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Feedback per assistant message id, kept for this visit across chat switches (spec 004 FR-011).
+  const [feedback, setFeedback] = useState<Map<number, FeedbackState>>(() => new Map());
+  const savingFeedback = useRef<Set<number>>(new Set()); // one save per reply at a time (FR-010)
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -70,7 +75,7 @@ export default function App() {
         // Only switch once the history is in, so a failure leaves the current chat untouched.
         showSession(
           sessionId,
-          history.messages.map((m) => ({ role: m.role, text: m.content })),
+          history.messages.map((m) => ({ id: m.id, role: m.role, text: m.content })),
         );
         setSidebarError(null);
         setSidebarOpen(false);
@@ -105,9 +110,12 @@ export default function App() {
     setPending((p) => new Set(p).add(sessionId));
 
     let reply: string;
+    let replyId: number | undefined;
     let ok = false;
     try {
-      reply = (await sendMessage(sessionId, text)).reply;
+      const res = await sendMessage(sessionId, text);
+      reply = res.reply;
+      replyId = typeof res.message_id === "number" ? res.message_id : undefined;
       ok = true;
     } catch {
       reply = "Something went wrong.";
@@ -124,7 +132,7 @@ export default function App() {
       void loadSessions();
     }
     if (viewVersion.current === version) {
-      setMessages((m) => [...m, { role: "assistant", text: reply, failed: !ok }]);
+      setMessages((m) => [...m, { id: replyId, role: "assistant", text: reply, failed: !ok }]);
     } else if (ok && activeRef.current === sessionId) {
       // The user left and came back while waiting; the server has the full thread now.
       void openSession(sessionId);
@@ -132,6 +140,30 @@ export default function App() {
   }
 
   const waiting = pending.has(activeSessionId);
+
+  function updateFeedback(messageId: number, change: Partial<FeedbackState>) {
+    setFeedback((all) => {
+      const next = new Map(all);
+      const current = next.get(messageId) ?? { saved: null, saving: false, error: null };
+      next.set(messageId, { ...current, ...change });
+      return next;
+    });
+  }
+
+  // The screen shows only what the backend confirmed (SC-003); a failure keeps the last saved state.
+  async function saveFeedback(messageId: number, value: Feedback) {
+    if (savingFeedback.current.has(messageId)) return;
+    savingFeedback.current.add(messageId);
+    updateFeedback(messageId, { saving: true });
+    try {
+      await submitFeedback(messageId, value);
+      updateFeedback(messageId, { saved: value, saving: false, error: null });
+    } catch {
+      updateFeedback(messageId, { saving: false, error: { attempted: value } });
+    } finally {
+      savingFeedback.current.delete(messageId);
+    }
+  }
 
   // Enter sends, Shift+Enter adds a new line (spec 003 FR-004).
   function onComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -196,6 +228,18 @@ export default function App() {
                         >
                           <BubbleContent className="message whitespace-pre-wrap text-base">{m.text}</BubbleContent>
                         </Bubble>
+                        {m.role === "assistant" && m.id !== undefined && (
+                          <MessageFooter>
+                            <FeedbackBar
+                              state={feedback.get(m.id)}
+                              onSubmit={(value) => void saveFeedback(m.id!, value)}
+                              onRetry={() => {
+                                const attempted = feedback.get(m.id!)?.error?.attempted;
+                                if (attempted) void saveFeedback(m.id!, attempted);
+                              }}
+                            />
+                          </MessageFooter>
+                        )}
                       </MessageContent>
                     </MessageRow>
                   </MessageScrollerItem>
