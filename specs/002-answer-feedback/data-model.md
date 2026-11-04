@@ -46,7 +46,7 @@ sessions 1 ──< messages 1 ──0..1 feedback
 
 | Field | Rule | Failure |
 |-------|------|---------|
-| path `message_id` | decimal digits only, 1 to 18 characters | 400 |
+| path `message_id` | a positive whole number of at most 18 digits: `^[1-9][0-9]{0,17}$` | 400 |
 | body | a JSON object | 400 |
 | `rating` | the string `up` or `down`, exactly | 400 |
 | `reason` | absent or `null`: no reason. Otherwise a string in `REASONS`, and the rating must be `down` | 400 |
@@ -86,7 +86,7 @@ R2). It is deliberately left alone now.
 
 | Shape | Change |
 |-------|--------|
-| `ChatResponse` (`POST /api/chat`) | **Adds** `message_id` (integer): the id of the assistant message created by this request. `session_id`, `reply` and `intent` are unchanged. |
+| `ChatResponse` (`POST /api/chat`) | **Adds** `message_id` (`integer | null`, always an integer today): the id of the assistant message created by this request. `session_id`, `reply` and `intent` are unchanged. |
 | `HistoryResponse`, `SessionsResponse`, health | None |
 
 No stored column is added for this. The id is read from the assistant row during the chat

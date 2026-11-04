@@ -52,14 +52,14 @@ response.
 
 | Principle | Status | How the design complies |
 |-----------|--------|-------------------------|
-| I. Contract-First Interfaces | ✅ Pass | The new endpoint and the new `message_id` field are defined in [contracts/feedback-api.md](./contracts/feedback-api.md) before any code. Both are additive: `session_id`, `reply` and `intent` keep their names, types and meaning. The affected consumers are named in the contract (frontend: optional use, backend: both changes, agent: none). The README contract section gets both changes in the same PR, and the frontend and backend owners both review. |
+| I. Contract-First Interfaces | ✅ Pass | The new endpoint and the new `message_id` field are defined in [contracts/feedback-api.md](./contracts/feedback-api.md) before any code. Both are additive: `session_id`, `reply` and `intent` keep their names, types and meaning. The new field is typed `integer | null` in the contract, as the principle requires new fields to be nullable or optional. It is always an integer today, and `null` is reserved for a future flow that creates no assistant message. The affected consumers are named in the contract (frontend: optional use, backend: both changes, agent: none). The README contract section gets both changes in the same PR, and the frontend and backend owners both review. |
 | II. Graceful Agent Degradation | ✅ Pass | The agent path isn't touched. `message_id` is returned for mock and agent replies alike, and feedback is accepted on both (FR-009). The existing `source` column keeps the two kinds of answer apart. |
 | III. Persistence Through Alembic Only | ✅ Pass | The table comes from migration `0002` only. Constraint names follow the convention in `app/db.py`, which gains a `uq` entry for the one new unique constraint (research R10). The feedback write is one transaction, and a refused submission writes nothing. The chat change reads the id inside the existing single transaction. The new endpoint is the only writer, and no read endpoint creates rows. |
 | IV. Tests Run Without External Services | ✅ Pass | The tests use in-memory SQLite and cover every point in the contract's test list, including each refusal and the race. The migration is checked in Docker as in the persistence feature (quickstart step 2). Two assertions in the existing chat tests are updated for the new field (R7, SC-006). |
 | V. POC Simplicity | ✅ Pass | No new runtime dependency, service or abstraction layer. One table, one module with a plain `APIRouter`, and validation in one small function. The reason list is a constant. Nothing speculative is built for escalation: only the rating is kept easy to relax (R2), and the follow-up is written down. |
 
 Also checked against the technology constraints: sync SQLAlchemy and `psycopg` (yes),
-Postgres 14 and 17 (plain DDL: identity column, foreign key, checks), the 400 `{"detail"}`
+Postgres 14 and 17 (plain DDL: identity column, foreign key, checks; T007 runs the migration and `alembic check` on both), the 400 `{"detail"}`
 error shape (R4), and no new environment variables, so `.env.example` is unchanged.
 
 **Gate result (before research)**: PASS. **After Phase 1 design**: PASS, no new violations.

@@ -41,6 +41,18 @@ Optional round trip, to prove the migration reverses cleanly:
 docker compose exec backend alembic downgrade -1 && docker compose exec backend alembic upgrade head
 ```
 
+The constitution requires the migration to work on Postgres 14 as well as 17 (the Docker
+image). Check 14 with a temporary container, or with a local Postgres 14 if you have one:
+
+```bash
+docker run -d --rm --name convai-pg14 -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app -e POSTGRES_DB=convai -p 5434:5432 postgres:14
+until docker exec convai-pg14 pg_isready -U app -d convai; do sleep 1; done
+cd backend
+DATABASE_URL=postgresql://app:app@localhost:5434/convai alembic upgrade head   # → ... 0001 -> 0002
+DATABASE_URL=postgresql://app:app@localhost:5434/convai alembic check          # → No new upgrade operations detected.
+docker rm -f convai-pg14
+```
+
 ## 3. API check
 
 ```bash
@@ -49,19 +61,23 @@ J='content-type: application/json'
 # Chat: the reply now carries message_id (the assistant message)
 curl -s -X POST localhost:8000/api/chat -H "$J" -d '{"session_id":"fb-demo","message":"hello"}'
 # → {"session_id":"fb-demo","reply":"(mock) You said: hello","intent":null,"message_id":2}
+#   (message_id is an integer today; the contract types it integer | null)
 # (use the message_id you get back below; it is 2 on a fresh database)
 
 # Rate up, then change to down with a reason and a comment (one row, replaced)
 curl -s -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"up"}'
 curl -s -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"down","reason":"unclear","comment":"Too vague"}'
 
-# Identical resubmission: 200, and updated_at doesn't move
+# Identical resubmission: 200, and updated_at doesn't move (the two selects print the same value)
+docker compose exec db psql -U app -d convai -tc "select updated_at from feedback where message_id = 2"
 curl -s -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"down","reason":"unclear","comment":"Too vague"}'
+docker compose exec db psql -U app -d convai -tc "select updated_at from feedback where message_id = 2"
 
 # Refusals (each prints the status and the detail)
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/1/feedback -H "$J" -d '{"rating":"up"}'                 # user message → 400
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/999/feedback -H "$J" -d '{"rating":"up"}'               # unknown → 404
-curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/abc/feedback -H "$J" -d '{"rating":"up"}'               # not a number → 400
+curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/abc/feedback -H "$J" -d '{"rating":"up"}'               # not a positive whole number → 400
+curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/0/feedback -H "$J" -d '{"rating":"up"}'                 # zero → 400
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"Up"}'                 # bad rating → 400
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"up","reason":"incorrect"}'   # reason with up → 400
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"down","reason":"wrong"}'     # unlisted reason → 400
@@ -74,7 +90,7 @@ curl -s -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"do
 curl -s localhost:8000/api/chat/fb-demo/history | python3 -m json.tool
 
 # What is stored: exactly one row for message 2
-docker compose exec db psql -U app -d convai -c "select message_id, rating, reason, comment, trace_id from feedback"
+docker compose exec db psql -U app -d convai -c "select message_id, rating, reason, comment, trace_id, created_at, updated_at from feedback"
 ```
 
 Expected: after the last rating call, the table shows one row, for message 2, with rating

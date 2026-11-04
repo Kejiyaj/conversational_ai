@@ -155,7 +155,8 @@ reason and no comment.
 - **Feedback for a user message**: refused, even though the message exists.
 - **Message id that doesn't exist**: reported as not found, which is different from the
   "not an assistant message" refusal.
-- **Message id that is not a number** (for example `abc`): refused with a clear message.
+- **Message id that is not a positive whole number of at most 18 digits** (for example `abc`,
+  `-1`, `0` or a 19-digit number): refused with a clear message.
 - **Comment at exactly the maximum length**: accepted. One character over: refused.
 - **Two submissions for the same answer at nearly the same moment**: the answer ends up with
   exactly one feedback record, holding the values of whichever submission was processed last.

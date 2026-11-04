@@ -99,7 +99,10 @@ file records the design decisions and why each was made.
 
 ## R7. Adding `message_id` to the chat response (FR-016, FR-017)
 
-- **Decision**: `ChatResponse` gains `message_id: int`, the id of the assistant row. `_persist`
+- **Decision**: `ChatResponse` gains `message_id: int | None`, the id of the assistant row. It is
+  always an integer today. It is typed nullable because Principle I requires new fields to be
+  nullable or optional, and `null` is reserved for a future flow that creates no assistant
+  message. `_persist`
   flushes after adding the two messages, reads the assistant row's id, then commits, and
   returns the id to the handler. The user's message id is not exposed.
 - **Rationale**: ids are assigned at flush, so no extra query is needed, and the commit
@@ -116,7 +119,7 @@ file records the design decisions and why each was made.
 ## R8. Status codes and the order of checks (FR-002 to FR-008)
 
 - **Decision**: checks run in this order, and the first failure wins:
-  1. `message_id` is a whole number (400).
+  1. `message_id` is a positive whole number of at most 18 digits (400).
   2. The body is a JSON object (400).
   3. `rating`, then `reason`, then `comment` are valid (400).
   4. The message exists (404).

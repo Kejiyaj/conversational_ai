@@ -16,14 +16,18 @@ The request is unchanged. The response gains `message_id`.
   "session_id": "string",
   "reply": "string",
   "intent": "string | null",
-  "message_id": 42
+  "message_id": "integer | null"
 }
 ```
 
-- `message_id` is an integer: the id of the **assistant** message created for this reply. It is
-  the id to use in the feedback endpoint.
-- It is present on every successful reply, whether the reply came from the agent or from the
-  fallback responder.
+Example: `"message_id": 42`.
+
+- `message_id` is typed `integer | null`, as Principle I requires new fields to be nullable or
+  optional. It is the id of the **assistant** message created for this reply, and it is the id
+  to use in the feedback endpoint.
+- **It is always populated today**: every successful reply carries an integer, whether the
+  reply came from the agent or from the fallback responder. `null` is reserved for a future
+  flow that creates no assistant message. Clients that don't use the field can ignore it.
 - The id of the user's message is not exposed.
 - `session_id`, `reply` and `intent` are exactly as before.
 
@@ -36,7 +40,7 @@ replaces the earlier feedback.
 
 | Part | Rules |
 |------|-------|
-| path `message_id` | Decimal digits only, 1 to 18 characters. |
+| path `message_id` | A positive whole number of at most 18 digits: `^[1-9][0-9]{0,17}$`. |
 | body | A JSON object (`Content-Type: application/json`). |
 
 ```json
@@ -77,7 +81,7 @@ these messages. When several apply, the first in this order is returned.
 
 | # | Case | `detail` |
 |---|------|----------|
-| 1 | `message_id` is not a whole number | `message_id must be a whole number` |
+| 1 | `message_id` is not a positive whole number of at most 18 digits | `message_id must be a positive whole number of at most 18 digits` |
 | 2 | Body is not a JSON object | `request body must be a JSON object` |
 | 3 | `rating` missing, empty, null, not a string, or not exactly `up` or `down` | `rating must be "up" or "down"` |
 | 4 | `reason` is not a string, or not on the list | `reason must be one of: incorrect, unclear, wanted_a_person, other` |
@@ -111,13 +115,14 @@ The backend pytest suite MUST cover each of these. Each refusal test also checks
 `feedback` row exists afterwards (FR-014).
 
 1. **Chat response**: it has exactly `session_id`, `reply`, `intent` and `message_id`. The
-   `message_id` is the id of the stored assistant message, for an agent reply and for a mock
-   reply. The existing fields are unchanged.
+   `message_id` is an integer, never null today, and is the id of the stored assistant
+   message, for an agent reply and for a mock reply. The existing fields are unchanged.
 2. **Rate up** and **rate down** return 200 with the response above, and store one row.
-3. **Mock reply**: feedback on a message whose `source` is `mock` is accepted.
+3. **Reply source**: feedback on a message whose `source` is `mock` is accepted, and so is
+   feedback on a message whose `source` is `agent`.
 4. **User message** returns 400 with the case 8 message.
-5. **Unknown id** returns 404. A non-numeric id (`abc`), a negative id and a 19-digit id
-   return 400 with the case 1 message.
+5. **Unknown id** returns 404. A non-numeric id (`abc`), `1.5`, `-1`, `0`, `007` and a 19-digit
+   id return 400 with the case 1 message.
 6. **Bad rating**: missing, `null`, empty, `"Up"`, `"thumbs_up"`, `true` and `5` each return 400.
 7. **Reasons**: each of the four values is accepted with `down`. An unlisted value, an empty
    string, `"Incorrect"` and `5` return 400. Any reason with `up` returns 400. Missing or

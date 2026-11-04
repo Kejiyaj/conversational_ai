@@ -27,6 +27,8 @@ Extends `backend/` (FastAPI). The FE ↔ BE contract in `README.md` is unchanged
 
 Both messages are committed in one transaction after the reply is known, so a crash mid-request leaves no orphaned user message.
 
+> Later change: spec 002 (`specs/002-answer-feedback/`) adds a `message_id` field to this response and a feedback endpoint.
+
 ## 3. `GET /api/chat/{session_id}/history`
 
 Returns the session's messages ordered by `created_at, id` ascending:

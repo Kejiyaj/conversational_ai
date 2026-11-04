@@ -99,9 +99,22 @@ needs these.
   `docker compose exec backend alembic check` prints "No new upgrade operations detected.",
   and that `docker compose exec db psql -U app -d convai -c '\d feedback'` shows the columns,
   the unique constraint, both check constraints and the foreign key. Then run
-  `alembic downgrade -1` followed by `alembic upgrade head`. (Depends on T005.)
+  `alembic downgrade -1` followed by `alembic upgrade head`. Then repeat the migration check
+  on **Postgres 14**, which the constitution requires alongside 17:
+  - If a local Postgres 14 exists (for example the Homebrew one, check with `psql --version`
+    or `brew list | grep postgresql@14`), create an empty `convai` database in it and use its
+    URL below.
+  - Otherwise start a temporary container and wait until it is ready:
+    `docker run -d --rm --name convai-pg14 -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app -e POSTGRES_DB=convai -p 5434:5432 postgres:14`,
+    then `until docker exec convai-pg14 pg_isready -U app -d convai; do sleep 1; done`. Its URL
+    is `postgresql://app:app@localhost:5434/convai`.
+  - From `backend/`, with that URL in `DATABASE_URL`, run `alembic upgrade head` and then
+    `alembic check`. Expect "No new upgrade operations detected."
+  - Stop the temporary container with `docker rm -f convai-pg14`, if you started one.
+  (Depends on T005.)
 
-**Checkpoint**: the table-rule tests pass, and the migration is applied and checked in Docker.
+**Checkpoint**: the table-rule tests pass, and the migration is applied and checked in Docker
+(Postgres 17) and on Postgres 14.
 
 ---
 
@@ -126,6 +139,7 @@ exists for that message.
   existing tests (SC-006).
 - [ ] T009 [US1] In `backend/tests/test_chat.py`, add tests for contract point 1:
   - The response has exactly the keys `session_id`, `reply`, `intent` and `message_id`.
+  - `message_id` is an integer and is never `null` today (the contract types it `integer | null`).
   - `message_id` equals the id of the stored **assistant** message, for a mock reply and, with
     `main.call_agent` patched as in the existing tests, for an agent reply.
   - It is not the id of the user's message.
@@ -138,12 +152,18 @@ exists for that message.
     linked to that message.
   - Feedback on a mock reply (`source = 'mock'`) is accepted, and the same message can be
     joined to its feedback row.
+  - Feedback on an agent reply (`source = 'agent'`) is accepted too. Patch `main.call_agent` as
+    the tests in `test_chat.py` do, and set `AGENT_URL`.
   - `GET /api/chat/{session_id}/history` is unchanged and contains no feedback.
   (Depends on T006.)
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] In `backend/app/main.py`, add `message_id: int` to `ChatResponse`. Change
+- [ ] T011 [US1] In `backend/app/main.py`, add `message_id: int | None` to `ChatResponse`, as
+  the contract types it (Principle I: new fields are nullable or optional). It is always set to
+  the assistant message's id, and `null` is reserved for a future flow with no assistant
+  message. Do not give it a default, so a missing id would show up as a validation error
+  instead of a silent `null`. Change
   `_persist` so that after adding the two messages it calls `db.flush()`, reads the assistant
   message's `id`, then commits and returns the id. The `chat` handler passes it into
   `ChatResponse`. Both messages stay in one transaction, and the user message id is not
@@ -172,8 +192,8 @@ bad rating and a bad body. Each returns the status and `detail` from the contrac
 - [ ] T013 [US2] In `backend/tests/test_feedback.py`, add refusal tests (contract points 4, 5,
   6, 9 and 13). Each one also checks that the `feedback` table is empty afterwards and that
   the message count is unchanged (FR-012, FR-014). Use these exact responses:
-  - `message_id` of `abc`, `-1`, `1.5` or a 19-digit number returns 400
-    `{"detail": "message_id must be a whole number"}`.
+  - `message_id` of `abc`, `1.5`, `-1`, `0`, `007` or a 19-digit number returns 400
+    `{"detail": "message_id must be a positive whole number of at most 18 digits"}`.
   - A body that is not JSON, a JSON array, a string or `null` returns 400
     `{"detail": "request body must be a JSON object"}`.
   - `rating` missing, `null`, `""`, `"Up"`, `"thumbs_up"`, `true` or `5` returns 400
@@ -194,7 +214,9 @@ bad rating and a bad body. Each returns the status and `detail` from the contrac
   contracts/feedback-api.md, in this order, first failure wins:
   - A small async dependency, `raw_body`, that returns `await request.body()`, so the handler
     stays a sync `def`.
-  - A path check that `message_id` matches `^[0-9]{1,18}$`.
+  - A path check that `message_id` matches `^[1-9][0-9]{0,17}$` (a positive whole number of
+    at most 18 digits). Otherwise raise 400
+    `message_id must be a positive whole number of at most 18 digits`.
   - `parse_feedback_body(raw: bytes)`, which uses `json.loads` and requires a JSON object.
     `rating` must be a `str` equal to `"up"` or `"down"`. If `reason` is present and not
     `None`, and the rating is `"up"`, it is refused.
@@ -326,7 +348,8 @@ remains, with rating `up` and no reason and no comment.
 **Purpose**: Documentation, the full-suite check, end-to-end validation and review.
 
 - [ ] T021 [P] Update the API contract section of `README.md` in the same change (FR-022,
-  Principle I): show `message_id` in the `POST /api/chat` response, and document
+  Principle I): show `message_id` (integer or null, always an integer today) in the
+  `POST /api/chat` response, and document
   `POST /api/messages/{message_id}/feedback` with its request, its 200 response and the 400
   and 404 cases. State that `trace_id` is always `null` for now and that the reason list is
   provisional. Keep the existing wording of the other endpoints.
@@ -337,8 +360,10 @@ remains, with rating `up` and no reason and no comment.
   change (SC-006: existing clients are unaffected).
 - [ ] T024 Run the end-to-end check in `quickstart.md` (steps 2 and 3, and the manual
   scenarios in step 4) against Docker. Start with `docker compose down -v` for a clean
-  database. Check each expected status and body, the single stored row, and `alembic check`.
-  (Depends on T022.)
+  database. Check each expected status and body, the single stored row, that `updated_at`
+  is the same before and after the identical resubmission, and `alembic check`. Then run
+  `docker compose restart backend` and check that the feedback row is still there
+  (SC-002, stored after a restart). (Depends on T022.)
 - [ ] T025 Check the implementation against the spec, as `CLAUDE.md` asks when the Superpowers
   skills are not available. Run `/speckit-analyze`, then `/speckit-converge`, and fix or
   record every finding. (Depends on T024.)
