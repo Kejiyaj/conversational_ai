@@ -245,3 +245,43 @@ describe("spec 004 US2: say why an answer was not helpful", () => {
     expect(server.calls.slice(before).map((c) => c.url)).toEqual([lastFeedback()!.url]);
   });
 });
+
+describe("spec 004 US3: change a rating", () => {
+  it("switching from Not helpful to Helpful keeps the comment and drops the reason", async () => {
+    await renderApp();
+    await chat("hello");
+    fireEvent.click(screen.getByRole("button", { name: "Not helpful" }));
+    await waitFor(() => expect(pressed("Not helpful")).toBe("true"));
+    fireEvent.click(screen.getByRole("radio", { name: "Incorrect" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Comment" }), { target: { value: "Wrong year" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await screen.findByText("Thanks for your feedback");
+
+    fireEvent.click(screen.getByRole("button", { name: "Helpful" }));
+    await waitFor(() => expect(pressed("Helpful")).toBe("true"));
+    expect(lastFeedback()!.body).toEqual({ rating: "up", comment: "Wrong year" });
+    expect(pressed("Not helpful")).toBe("false");
+  });
+
+  it("switching from Helpful to Not helpful replaces the rating and opens the follow-up", async () => {
+    await renderApp();
+    await chat("hello");
+    fireEvent.click(screen.getByRole("button", { name: "Helpful" }));
+    await waitFor(() => expect(pressed("Helpful")).toBe("true"));
+    fireEvent.click(screen.getByRole("button", { name: "Not helpful" }));
+    await waitFor(() => expect(pressed("Not helpful")).toBe("true"));
+    expect(lastFeedback()!.body).toEqual({ rating: "down" });
+    expect(screen.getByRole("radiogroup", { name: "Reason" })).toBeTruthy();
+  });
+
+  it("tapping the already selected thumb sends nothing", async () => {
+    await renderApp();
+    await chat("hello");
+    fireEvent.click(screen.getByRole("button", { name: "Helpful" }));
+    await waitFor(() => expect(pressed("Helpful")).toBe("true"));
+    const before = feedbackPosts().length;
+    fireEvent.click(screen.getByRole("button", { name: "Helpful" }));
+    expect(feedbackPosts()).toHaveLength(before);
+    expect(pressed("Helpful")).toBe("true");
+  });
+});

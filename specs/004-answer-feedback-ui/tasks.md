@@ -77,13 +77,13 @@ description: "Task list for spec 004: answer feedback in the chat UI"
 
 ### Tests for User Story 2 (write first, confirm they FAIL)
 
-- [X] T012 [US2] Add a `describe("US2 …")` block to `frontend/src/__tests__/Feedback.test.tsx`. Cases: (a) after "Not helpful" is saved, the follow-up shows the four reasons "Incorrect", "Unclear", "I wanted a person", "Other", a comment box and "Send"; (b) choosing "Unclear" and Send POSTs `{ "rating": "down", "reason": "unclear" }`, then the follow-up closes and "Thanks for your feedback" shows; (c) a comment with a reason POSTs `{ rating: "down", reason, comment }` with the comment exactly as typed; (d) after "Helpful", an "Add a comment" button opens a comment box with no reasons; Send POSTs `{ "rating": "up", "comment": "…" }`; (e) a whitespace-only comment is not sent (body has no `comment` key); (f) the comment box has `maxLength` 1000 and shows "1000 characters left", updating as you type; (g) dismissing the follow-up ("Close") sends nothing more and keeps "Not helpful" pressed; (h) "I wanted a person" is sent as `wanted_a_person` and no other request is made. **Done: also added a case for a failed Send (panel stays open with Retry). The follow-up button is named "Send feedback" so it does not clash with the composer\'s "Send".**
+- [X] T012 [US2] Add a `describe("US2 …")` block to `frontend/src/__tests__/Feedback.test.tsx`. Cases: (a) after "Not helpful" is saved, the follow-up shows the four reasons "Incorrect", "Unclear", "I wanted a person", "Other", a comment box and "Send"; (b) choosing "Unclear" and Send POSTs `{ "rating": "down", "reason": "unclear" }`, then the follow-up closes and "Thanks for your feedback" shows; (c) a comment with a reason POSTs `{ rating: "down", reason, comment }` with the comment exactly as typed; (d) after "Helpful", an "Add a comment" button opens a comment box with no reasons; Send POSTs `{ "rating": "up", "comment": "…" }`; (e) a whitespace-only comment is not sent (body has no `comment` key); (f) the comment box has `maxLength` 1000 and shows "1000 characters left", updating as you type; (g) dismissing the follow-up ("Close") sends nothing more and keeps "Not helpful" pressed; (h) "I wanted a person" is sent as `wanted_a_person` and no other request is made. **Done: also added a case for a failed Send (panel stays open with Retry). The follow-up button is named "Send feedback" so it does not clash with the composer's "Send".**
 - [X] T013 [US2] Run `npm test`; confirm T012 cases fail
 
 ### Implementation for User Story 2
 
 - [X] T014 [US2] In `frontend/src/FeedbackBar.tsx`: add the follow-up panel, open after a "down" save succeeds and when the customer clicks "Add a comment" (shown after an "up" save). Reasons (down only): `ToggleGroup type="single"` with `ToggleGroupItem`s labelled per data-model.md, values the backend codes, `aria-label="Reason"`. Comment: `Textarea` with `maxLength={1000}`, `aria-label="Comment"`, and a counter "N characters left". Buttons: "Send" (`Button size="sm"`) and "Close" (`Button variant="ghost" size="sm"`). Send calls `onSubmit({ rating: saved.rating, reason?, comment? })`, omitting a blank comment and omitting reason when none is chosen
-- [X] T015 [US2] In `frontend/src/App.tsx` / `FeedbackBar.tsx`: track `open` per reply (data-model.md); close the panel and show "Thanks for your feedback" (`text-sm text-muted-foreground`) after a successful Send; Close hides the panel without a request. A failed Send keeps the panel open with the error + Retry from US1. **Done: `open` is kept inside `FeedbackBar` (screen-only state), not in App\'s visit map; only confirmed feedback needs to survive chat switches.**
+- [X] T015 [US2] In `frontend/src/App.tsx` / `FeedbackBar.tsx`: track `open` per reply (data-model.md); close the panel and show "Thanks for your feedback" (`text-sm text-muted-foreground`) after a successful Send; Close hides the panel without a request. A failed Send keeps the panel open with the error + Retry from US1. **Done: `open` is kept inside `FeedbackBar` (screen-only state), not in App's visit map; only confirmed feedback needs to survive chat switches.**
 - [X] T016 [US2] Run `npx tsc -b` and `npm test`; all tests pass
 
 **Checkpoint**: Reasons and comments work.
@@ -98,12 +98,12 @@ description: "Task list for spec 004: answer feedback in the chat UI"
 
 ### Tests for User Story 3 (write first, confirm they FAIL if not already passing)
 
-- [ ] T017 [US3] Add a `describe("US3 …")` block to `frontend/src/__tests__/Feedback.test.tsx`. Cases: (a) rate "Not helpful" with reason "incorrect" and a comment, then click "Helpful": the last POST is `{ "rating": "up", "comment": "<same comment>" }` (no reason) and "Helpful" is pressed; (b) rate "Helpful", then "Not helpful": POST `{ "rating": "down" }` (plus any comment) and the follow-up opens; (c) clicking the already-pressed thumb makes no request
-- [ ] T018 [US3] Run `npm test`; note which T017 cases already pass from T010's rules and which fail
+- [X] T017 [US3] Add a `describe("US3 …")` block to `frontend/src/__tests__/Feedback.test.tsx`. Cases: (a) rate "Not helpful" with reason "incorrect" and a comment, then click "Helpful": the last POST is `{ "rating": "up", "comment": "<same comment>" }` (no reason) and "Helpful" is pressed; (b) rate "Helpful", then "Not helpful": POST `{ "rating": "down" }` (plus any comment) and the follow-up opens; (c) clicking the already-pressed thumb makes no request
+- [X] T018 [US3] Run `npm test`; note which T017 cases already pass from T010's rules and which fail **Done: all three passed already (rules built into `rate()` in T010); confirmed meaningful by breaking the reason rule, which made case (a) fail.**
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Fix any failing T017 case in `frontend/src/App.tsx` / `frontend/src/FeedbackBar.tsx` (switching keeps the comment, drops the reason on "up", opens the follow-up on "down"); run `npx tsc -b` and `npm test`; all pass
+- [X] T019 [US3] Fix any failing T017 case in `frontend/src/App.tsx` / `frontend/src/FeedbackBar.tsx` (switching keeps the comment, drops the reason on "up", opens the follow-up on "down"); run `npx tsc -b` and `npm test`; all pass **Done: no fix needed.**
 
 **Checkpoint**: All stories complete.
 
