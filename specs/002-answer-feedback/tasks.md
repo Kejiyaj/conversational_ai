@@ -367,10 +367,10 @@ remains, with rating `up` and no reason and no comment.
 - [X] T025 Check the implementation against the spec, as `CLAUDE.md` asks when the Superpowers
   skills are not available. Run `/speckit-analyze`, then `/speckit-converge`, and fix or
   record every finding. (Depends on T024.)
-- [ ] T026 Open the pull request. Request review from Vinod, because the chat response gains
+- [X] T026 Open the pull request. Request review from Vinod, because the chat response gains
   a field (Principle I: both sides of a contract change review), and from the backend owner.
   Mention in the description that the reason list is pending approval and that the thumbs UI
-  is a separate frontend spec. (Depends on T025.)
+  is a separate frontend spec. (Depends on T025.) — Note: merged to main (no PR opened).
 
 ---
 
