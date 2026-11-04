@@ -3,9 +3,9 @@ import os
 from datetime import datetime
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
@@ -45,6 +45,21 @@ class HistoryMessage(BaseModel):
 class HistoryResponse(BaseModel):
     session_id: str
     messages: list[HistoryMessage]
+
+
+class SessionSummary(BaseModel):
+    session_id: str
+    title: str
+    created_at: datetime
+    last_active_at: datetime
+
+
+class SessionsResponse(BaseModel):
+    sessions: list[SessionSummary]
+
+
+MAX_SESSION_IDS = 200
+TITLE_MAX_CHARS = 80
 
 
 @app.get("/api/health")
@@ -129,3 +144,52 @@ def history(session_id: str, db: DbSession = Depends(get_db)):
         .order_by(models.Message.created_at, models.Message.id)
     ).all()
     return HistoryResponse(session_id=session_id, messages=rows)
+
+
+def _title_from(message: str) -> str:
+    """First user message as a one-line label: collapse whitespace, cap at 80 chars plus '…'."""
+    text = " ".join(message.split())
+    return text if len(text) <= TITLE_MAX_CHARS else text[:TITLE_MAX_CHARS] + "…"
+
+
+@app.get("/api/sessions", response_model=SessionsResponse)
+def list_sessions(ids: list[str] = Query(default=[]), db: DbSession = Depends(get_db)):
+    """Summaries of the requested sessions (the browser's own list), newest activity first.
+
+    Read-only: unknown ids are skipped and nothing is created.
+    """
+    if len(ids) > MAX_SESSION_IDS:
+        raise HTTPException(status_code=400, detail=f"too many session ids (max {MAX_SESSION_IDS})")
+    wanted = {i.strip() for i in ids if i.strip()}
+    if not wanted:
+        return SessionsResponse(sessions=[])
+
+    msg = models.Message
+    first_user_message = (
+        select(msg.content)
+        .where(msg.session_id == models.Session.id, msg.role == "user")
+        .order_by(msg.created_at, msg.id)
+        .limit(1)
+        .correlate(models.Session)
+        .scalar_subquery()
+    )
+    last_active = func.max(msg.created_at).label("last_active_at")
+    rows = db.execute(
+        select(models.Session.id, models.Session.created_at, last_active, first_user_message.label("title"))
+        .join(msg, msg.session_id == models.Session.id)
+        .where(models.Session.id.in_(wanted))
+        .group_by(models.Session.id, models.Session.created_at)
+        .order_by(last_active.desc(), models.Session.id)
+    ).all()
+
+    return SessionsResponse(
+        sessions=[
+            SessionSummary(
+                session_id=r.id,
+                title=_title_from(r.title or ""),
+                created_at=r.created_at,
+                last_active_at=r.last_active_at,
+            )
+            for r in rows
+        ]
+    )
