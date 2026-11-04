@@ -276,9 +276,10 @@ reason and no comment.
 - **SC-004**: After any number of submissions for the same answer, including simultaneous
   ones, the answer has exactly one feedback record.
 - **SC-005**: A user gets confirmation of a submitted rating within 1 second under normal use.
-- **SC-006**: Existing clients are unaffected. Every existing automated test passes without
-  modification, and the existing fields of the chat reply, the history and the health check
-  are unchanged.
+- **SC-006**: Existing clients are unaffected. Every existing automated test passes, and the
+  existing fields of the chat reply, the history and the health check are unchanged. The
+  only test edits allowed are the two assertions that compare the whole chat reply, which
+  now also contain the new `message_id`.
 - **SC-007**: The team can tell, for every stored feedback record, which answer it is about,
   whether that answer came from the agent or the fallback responder, whether the rating was
   up or down, and, for "down", the reason if one was given.

@@ -56,4 +56,7 @@
   reporting are a follow-up.
 - For `/speckit-plan`: keep the rating relaxable, so a future escalation record without a
   user rating can be added without reworking the feedback data.
-- All items pass. The spec is ready for `/speckit-plan`.
+- Amended during planning: SC-006 said every existing test passes without modification, but
+  two existing assertions compare the whole chat response and must gain `message_id`. SC-006
+  now allows exactly those two edits.
+- All items pass. The spec is ready for `/speckit-plan`. The plan is done (see `plan.md`).
