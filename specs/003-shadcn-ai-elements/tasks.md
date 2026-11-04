@@ -38,14 +38,14 @@ The existing tests find elements by these hooks. Each rebuilt element MUST keep 
 
 **Purpose**: Install Tailwind and shadcn (Radix) with the chat components. Steps and pitfalls are in research.md R1–R3.
 
-- [ ] T001 Install `tailwindcss` and `@tailwindcss/vite` as dependencies and `@types/node` as a devDependency in `frontend/package.json` (run `npm install` in `frontend/`)
-- [ ] T002 Add the Tailwind plugin and the `@` alias (`resolve: { alias: { "@": path.resolve(__dirname, "./src") } }`, `import path from "node:path"`) in `frontend/vite.config.ts`; keep the existing `/api` proxy and `test: { environment: "jsdom" }`
-- [ ] T003 Add `"paths": { "@/*": ["./src/*"] }` to `compilerOptions` in `frontend/tsconfig.json`. Do NOT add `baseUrl`: TypeScript 7 rejects it (TS5102)
-- [ ] T004 Add `@import "tailwindcss";` as the first line of `frontend/src/styles.css`
-- [ ] T005 Run `npx shadcn@latest init -b radix -t vite -p nova -y </dev/null` in `frontend/`; confirm it creates `frontend/components.json`, `frontend/src/lib/utils.ts`, `frontend/src/components/ui/button.tsx` and adds shadcn variables to `frontend/src/styles.css`
-- [ ] T006 Run `npx shadcn@latest add message-scroller message bubble input-group -y </dev/null` in `frontend/`; confirm it creates `message.tsx`, `bubble.tsx`, `message-scroller.tsx`, `input-group.tsx`, `input.tsx`, `textarea.tsx` in `frontend/src/components/ui/`
-- [ ] T007 Remove Geist: uninstall `@fontsource-variable/geist` and delete its `@import` from `frontend/src/styles.css`. Move `shadcn` from dependencies to devDependencies in `frontend/package.json` (research R3)
-- [ ] T008 Verify in `frontend/`: `npx tsc -b`, `npm test` (all 23 existing tests pass), `npm run build`. Stop and fix before continuing
+- [X] T001 Install `tailwindcss` and `@tailwindcss/vite` as dependencies and `@types/node` as a devDependency in `frontend/package.json` (run `npm install` in `frontend/`)
+- [X] T002 Add the Tailwind plugin and the `@` alias (`resolve: { alias: { "@": path.resolve(__dirname, "./src") } }`, `import path from "node:path"`) in `frontend/vite.config.ts`; keep the existing `/api` proxy and `test: { environment: "jsdom" }`
+- [X] T003 Add `"paths": { "@/*": ["./src/*"] }` to `compilerOptions` in `frontend/tsconfig.json`. Do NOT add `baseUrl`: TypeScript 7 rejects it (TS5102)
+- [X] T004 Add `@import "tailwindcss";` as the first line of `frontend/src/styles.css`
+- [X] T005 Run `npx shadcn@latest init -b radix -t vite -p nova -y </dev/null` in `frontend/`; confirm it creates `frontend/components.json`, `frontend/src/lib/utils.ts`, `frontend/src/components/ui/button.tsx` and adds shadcn variables to `frontend/src/styles.css`
+- [X] T006 Run `npx shadcn@latest add message-scroller message bubble input-group -y </dev/null` in `frontend/`; confirm it creates `message.tsx`, `bubble.tsx`, `message-scroller.tsx`, `input-group.tsx`, `input.tsx`, `textarea.tsx` in `frontend/src/components/ui/`
+- [X] T007 Remove Geist: uninstall `@fontsource-variable/geist` and delete its `@import` from `frontend/src/styles.css`. Move `shadcn` from dependencies to devDependencies in `frontend/package.json` (research R3)
+- [X] T008 Verify in `frontend/`: `npx tsc -b`, `npm test` (all 23 existing tests pass), `npm run build`. Stop and fix before continuing
 
 **Checkpoint**: shadcn is installed; the old UI still looks and works as before.
 
@@ -55,7 +55,7 @@ The existing tests find elements by these hooks. Each rebuilt element MUST keep 
 
 **Purpose**: Test setup that both stories need.
 
-- [ ] T009 If `npm test` fails in later phases with `ResizeObserver` or `IntersectionObserver` not defined, add minimal no-op stubs in a new `frontend/src/__tests__/setup.ts` and register it with `test.setupFiles` in `frontend/vite.config.ts` (research R6). Otherwise skip and mark done with a note
+- [X] T009 If `npm test` fails in later phases with `ResizeObserver` or `IntersectionObserver` not defined, add minimal no-op stubs in a new `frontend/src/__tests__/setup.ts` and register it with `test.setupFiles` in `frontend/vite.config.ts` (research R6). Otherwise skip and mark done with a note. **Done: not needed; all tests pass without stubs.**
 
 **Checkpoint**: Foundation ready; user stories can start.
 
@@ -69,19 +69,19 @@ The existing tests find elements by these hooks. Each rebuilt element MUST keep 
 
 ### Tests for User Story 1 (write first, confirm they FAIL)
 
-- [ ] T010 [US1] Create `frontend/src/__tests__/Composer.test.tsx` using the existing `frontend/src/__tests__/helpers.ts` fetch mocks. Cases: (a) pressing Enter in the "Type a message" box sends the message (the user message appears in `.message` elements and `/api/chat` is called once); (b) Shift+Enter does not send and the box still holds the text; (c) Enter on empty or whitespace-only input sends nothing; (d) the message box is a multi-line `textarea`; (e) Send is disabled while a reply is pending; (f) a failed send shows "Something went wrong." as an assistant message
-- [ ] T011 [US1] Run `npm test` in `frontend/`; confirm T010 cases (a), (b) and (d) fail on the old UI and all existing tests still pass
+- [X] T010 [US1] Create `frontend/src/__tests__/Composer.test.tsx` using the existing `frontend/src/__tests__/helpers.ts` fetch mocks. Cases: (a) pressing Enter in the "Type a message" box sends the message (the user message appears in `.message` elements and `/api/chat` is called once); (b) Shift+Enter does not send and the box still holds the text; (c) Enter on empty or whitespace-only input sends nothing; (d) the message box is a multi-line `textarea`; (e) Send is disabled while a reply is pending; (f) a failed send shows "Something went wrong." as an assistant message
+- [X] T011 [US1] Run `npm test` in `frontend/`; confirm T010 cases (a), (b) and (d) fail on the old UI and all existing tests still pass
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Add `failed?: boolean` to the frontend `Message` type in `frontend/src/App.tsx` and set it on the "Something went wrong." reply only (data-model.md). Not stored or sent
-- [ ] T013 [US1] Rebuild the thread in `frontend/src/App.tsx` with `MessageScrollerProvider autoScroll` > `MessageScroller` > `MessageScrollerViewport` > `MessageScrollerContent` > `MessageScrollerItem` (add `scrollAnchor` on user turns) > `Message align` > `MessageContent` > `Bubble` > `BubbleContent`, plus `MessageScrollerButton` for "scroll to latest". User turns: `align="end"`, `variant="default"`; assistant: `align="start"`, `variant="secondary"`; failed reply: `variant="destructive"`. Put class `message` on the element whose text is exactly the message text. Keep the `.pending` indicator inside the scroller
-- [ ] T014 [US1] Rebuild the composer in `frontend/src/App.tsx` with `InputGroup` + `InputGroupTextarea` (placeholder "Type a message") + `InputGroupButton` (accessible name "Send", lucide `ArrowUp` or `Send` icon). Enter submits, Shift+Enter inserts a newline, the textarea grows with content up to a max height (for example `max-h-40`), Send is disabled while pending. Keep the existing `send` logic and its stale-reply guards unchanged
-- [ ] T015 [US1] Rebuild the layout and header in `frontend/src/App.tsx` with Tailwind classes: full-height flex layout (`layout`, `open` hooks), sidebar column, `backdrop` overlay on narrow screens (below 768px), "Chats" toggle as a shadcn `Button variant="ghost"` with `aria-expanded`, `<h1>Conversational AI</h1>`
-- [ ] T016 [P] [US1] Rebuild `frontend/src/Sidebar.tsx` with shadcn `Button`: "New chat" `variant="default"`; each session item `variant="ghost"`, full width, left-aligned, two lines (`session-title` span and `<time>`), `aria-current` on the active one with a visible active style; error box with `role="alert"` and a "Retry" `Button variant="outline" size="sm"`; empty state "No past chats yet." Props and behavior unchanged
-- [ ] T017 [US1] Delete the hand-written rules (`.layout`, `.sidebar*`, `.session-*`, `.chat*`, `.messages`, `.message*`, `.composer`, `.pending`, `.backdrop`, `.chats-toggle`, `.new-chat`) from `frontend/src/styles.css`, keeping only the Tailwind/shadcn imports, the shadcn variable blocks and any rule still needed for the narrow-screen layout. The hook class names stay in the JSX
-- [ ] T018 [US1] Make long unbroken text (for example a pasted URL) wrap inside its bubble without widening the page: check `BubbleContent` keeps `wrap-break-word` and `min-w-0` in `frontend/src/components/ui/bubble.tsx` (spec edge case)
-- [ ] T019 [US1] Run `npx tsc -b`, `npm test` and `npm run build` in `frontend/`. All existing tests and T010 pass with no edits to existing test files
+- [X] T012 [US1] Add `failed?: boolean` to the frontend `Message` type in `frontend/src/App.tsx` and set it on the "Something went wrong." reply only (data-model.md). Not stored or sent
+- [X] T013 [US1] Rebuild the thread in `frontend/src/App.tsx` with `MessageScrollerProvider autoScroll` > `MessageScroller` > `MessageScrollerViewport` > `MessageScrollerContent` > `MessageScrollerItem` (add `scrollAnchor` on user turns) > `Message align` > `MessageContent` > `Bubble` > `BubbleContent`, plus `MessageScrollerButton` for "scroll to latest". User turns: `align="end"`, `variant="default"`; assistant: `align="start"`, `variant="secondary"`; failed reply: `variant="destructive"`. Put class `message` on the element whose text is exactly the message text. Keep the `.pending` indicator inside the scroller
+- [X] T014 [US1] Rebuild the composer in `frontend/src/App.tsx` with `InputGroup` + `InputGroupTextarea` (placeholder "Type a message") + `InputGroupButton` (accessible name "Send", lucide `ArrowUp` or `Send` icon). Enter submits, Shift+Enter inserts a newline, the textarea grows with content up to a max height (for example `max-h-40`), Send is disabled while pending. Keep the existing `send` logic and its stale-reply guards unchanged
+- [X] T015 [US1] Rebuild the layout and header in `frontend/src/App.tsx` with Tailwind classes: full-height flex layout (`layout`, `open` hooks), sidebar column, `backdrop` overlay on narrow screens (below 768px), "Chats" toggle as a shadcn `Button variant="ghost"` with `aria-expanded`, `<h1>Conversational AI</h1>`
+- [X] T016 [P] [US1] Rebuild `frontend/src/Sidebar.tsx` with shadcn `Button`: "New chat" `variant="default"`; each session item `variant="ghost"`, full width, left-aligned, two lines (`session-title` span and `<time>`), `aria-current` on the active one with a visible active style; error box with `role="alert"` and a "Retry" `Button variant="outline" size="sm"`; empty state "No past chats yet." Props and behavior unchanged
+- [X] T017 [US1] Delete the hand-written rules (`.layout`, `.sidebar*`, `.session-*`, `.chat*`, `.messages`, `.message*`, `.composer`, `.pending`, `.backdrop`, `.chats-toggle`, `.new-chat`) from `frontend/src/styles.css`, keeping only the Tailwind/shadcn imports, the shadcn variable blocks and any rule still needed for the narrow-screen layout. The hook class names stay in the JSX
+- [X] T018 [US1] Make long unbroken text (for example a pasted URL) wrap inside its bubble without widening the page: check `BubbleContent` keeps `wrap-break-word` and `min-w-0` in `frontend/src/components/ui/bubble.tsx` (spec edge case). **Done: already present; no change needed. Verified in the browser with a long URL.**
+- [X] T019 [US1] Run `npx tsc -b`, `npm test` and `npm run build` in `frontend/`. All existing tests and T010 pass with no edits to existing test files
 
 **Checkpoint**: User Story 1 is complete. The UI runs on shadcn/AI Elements with the default (neutral) theme.
 
