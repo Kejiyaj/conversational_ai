@@ -1,0 +1,39 @@
+/*
+ * Principal theme for the chat UI. This is the only place brand values live (spec 003 FR-007).
+ *
+ * Values come from the Principal Design System (PDS) tokens used on principal.com, mapped onto
+ * shadcn's variables. Mapping and source tokens: specs/003-shadcn-ai-elements/contracts/theme-tokens.md
+ *
+ * No Principal stylesheets, font files or logo are included (FR-009). FS Elliot is licensed, so
+ * visitors without it get Arial, the same fallback principal.com uses.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #2f2f2f;
+  --card: #ffffff;
+  --card-foreground: #2f2f2f;
+  --popover: #ffffff;
+  --popover-foreground: #2f2f2f;
+  --primary: #005fb8;
+  --primary-hover: #004c97;
+  --primary-foreground: #ffffff;
+  --secondary: #e3f5fd;
+  --secondary-foreground: #002855;
+  --muted: #f7f7f7;
+  --muted-foreground: #5e5e5e;
+  --accent: #f2f9fd;
+  --accent-foreground: #005fb8;
+  --destructive: #c00000;
+  --border: #dedede;
+  --input: #8b8b8b;
+  --ring: #3871ff;
+  --radius: 1.5rem;
+  --sidebar: #f7f7f7;
+  --sidebar-foreground: #2f2f2f;
+  --sidebar-primary: #005fb8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e3f5fd;
+  --sidebar-accent-foreground: #002855;
+  --sidebar-border: #dedede;
+  --sidebar-ring: #3871ff;
+}
