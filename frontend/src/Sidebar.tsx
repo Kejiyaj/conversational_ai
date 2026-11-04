@@ -1,4 +1,7 @@
+import { PlusIcon } from "lucide-react";
+
 import type { SessionSummary } from "./api";
+import { Button } from "@/components/ui/button";
 
 type Props = {
   sessions: SessionSummary[];
@@ -22,31 +25,41 @@ export default function Sidebar({
   loading,
 }: Props) {
   return (
-    <nav className="sidebar-nav" aria-label="Past chats">
-      <button type="button" className="new-chat" onClick={onNewChat}>
+    <nav className="flex flex-col gap-3" aria-label="Past chats">
+      <Button type="button" onClick={onNewChat}>
+        <PlusIcon />
         New chat
-      </button>
+      </Button>
       {error && (
-        <div className="sidebar-error" role="alert">
+        <div
+          className="flex items-center justify-between gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
           <span>{error}</span>
-          <button type="button" onClick={onRetry}>
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
-      {sessions.length === 0 && !loading && !error && <p className="sidebar-empty">No past chats yet.</p>}
-      <ul className="session-list">
+      {sessions.length === 0 && !loading && !error && (
+        <p className="px-2 text-sm text-muted-foreground">No past chats yet.</p>
+      )}
+      {/* `session-title` is a test hook (spec 003 tasks): keep it. */}
+      <ul className="flex flex-col gap-1">
         {sessions.map((s) => (
           <li key={s.session_id}>
-            <button
+            <Button
               type="button"
-              className="session-item"
+              variant="ghost"
+              className="h-auto w-full flex-col items-start gap-0.5 px-3 py-2 text-left whitespace-normal aria-[current=true]:bg-sidebar-accent aria-[current=true]:text-sidebar-accent-foreground"
               aria-current={s.session_id === activeSessionId ? "true" : undefined}
               onClick={() => onSelect(s.session_id)}
             >
-              <span className="session-title">{s.title}</span>
-              <time dateTime={s.last_active_at}>{timeFormat.format(new Date(s.last_active_at))}</time>
-            </button>
+              <span className="session-title w-full truncate font-medium">{s.title}</span>
+              <time className="text-xs text-muted-foreground" dateTime={s.last_active_at}>
+                {timeFormat.format(new Date(s.last_active_at))}
+              </time>
+            </Button>
           </li>
         ))}
       </ul>

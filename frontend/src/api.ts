@@ -1,7 +1,26 @@
 // Typed calls to the backend. Each throws an Error on a network failure or a non-2xx response.
 // Contract: README.md and specs/001-chat-session-sidebar/contracts/sessions-api.md.
 
-export type ChatResponse = { session_id: string; reply: string; intent: string | null };
+export type ChatResponse = {
+  session_id: string;
+  reply: string;
+  intent: string | null;
+  message_id: number | null; // id of the assistant message, used for feedback (spec 002)
+};
+
+// Answer feedback (spec 002 contract: specs/002-answer-feedback/contracts/feedback-api.md).
+export type FeedbackRating = "up" | "down";
+export type FeedbackReason = "incorrect" | "unclear" | "wanted_a_person" | "other";
+export type Feedback = { rating: FeedbackRating; reason?: FeedbackReason; comment?: string };
+export type FeedbackResponse = {
+  message_id: number;
+  rating: FeedbackRating;
+  reason: FeedbackReason | null;
+  comment: string | null;
+  trace_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type HistoryMessage = {
   id: number;
@@ -35,6 +54,15 @@ export function sendMessage(sessionId: string, message: string): Promise<ChatRes
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, message }),
+  });
+}
+
+// The backend replaces the whole record on each call, so always send the full desired state.
+export function submitFeedback(messageId: number, feedback: Feedback): Promise<FeedbackResponse> {
+  return request<FeedbackResponse>(`/api/messages/${messageId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(feedback),
   });
 }
 

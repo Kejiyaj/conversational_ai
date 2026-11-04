@@ -1,10 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUpIcon, MenuIcon } from "lucide-react";
 
-import { getHistory, listSessions, sendMessage, type SessionSummary } from "./api";
+import { getHistory, listSessions, sendMessage, submitFeedback, type Feedback, type SessionSummary } from "./api";
 import { getSessionIds, rememberSession } from "./sessionStore";
+import FeedbackBar, { type FeedbackState } from "./FeedbackBar";
 import Sidebar from "./Sidebar";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
+import { Button } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
+import { Message as MessageRow, MessageContent, MessageFooter } from "@/components/ui/message";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller";
 
-type Message = { role: "user" | "assistant"; text: string };
+// `failed` marks the "Something went wrong." reply so it gets the error style (view only, never sent).
+// `id` is the backend message id; replies with one can be rated (spec 004).
+type Message = { id?: number; role: "user" | "assistant"; text: string; failed?: boolean };
 type SidebarError = { message: string; retry: () => void };
 
 export default function App() {
@@ -16,6 +32,9 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sidebarError, setSidebarError] = useState<SidebarError | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Feedback per assistant message id, kept for this visit across chat switches (spec 004 FR-011).
+  const [feedback, setFeedback] = useState<Map<number, FeedbackState>>(() => new Map());
+  const savingFeedback = useRef<Set<number>>(new Set()); // one save per reply at a time (FR-010)
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -56,7 +75,7 @@ export default function App() {
         // Only switch once the history is in, so a failure leaves the current chat untouched.
         showSession(
           sessionId,
-          history.messages.map((m) => ({ role: m.role, text: m.content })),
+          history.messages.map((m) => ({ id: m.id, role: m.role, text: m.content })),
         );
         setSidebarError(null);
         setSidebarOpen(false);
@@ -91,9 +110,12 @@ export default function App() {
     setPending((p) => new Set(p).add(sessionId));
 
     let reply: string;
+    let replyId: number | undefined;
     let ok = false;
     try {
-      reply = (await sendMessage(sessionId, text)).reply;
+      const res = await sendMessage(sessionId, text);
+      reply = res.reply;
+      replyId = typeof res.message_id === "number" ? res.message_id : undefined;
       ok = true;
     } catch {
       reply = "Something went wrong.";
@@ -110,7 +132,7 @@ export default function App() {
       void loadSessions();
     }
     if (viewVersion.current === version) {
-      setMessages((m) => [...m, { role: "assistant", text: reply }]);
+      setMessages((m) => [...m, { id: replyId, role: "assistant", text: reply, failed: !ok }]);
     } else if (ok && activeRef.current === sessionId) {
       // The user left and came back while waiting; the server has the full thread now.
       void openSession(sessionId);
@@ -119,9 +141,46 @@ export default function App() {
 
   const waiting = pending.has(activeSessionId);
 
+  function updateFeedback(messageId: number, change: Partial<FeedbackState>) {
+    setFeedback((all) => {
+      const next = new Map(all);
+      const current = next.get(messageId) ?? { saved: null, saving: false, error: null };
+      next.set(messageId, { ...current, ...change });
+      return next;
+    });
+  }
+
+  // The screen shows only what the backend confirmed (SC-003); a failure keeps the last saved state.
+  async function saveFeedback(messageId: number, value: Feedback) {
+    if (savingFeedback.current.has(messageId)) return;
+    savingFeedback.current.add(messageId);
+    updateFeedback(messageId, { saving: true });
+    try {
+      await submitFeedback(messageId, value);
+      updateFeedback(messageId, { saved: value, saving: false, error: null });
+    } catch {
+      updateFeedback(messageId, { saving: false, error: { attempted: value } });
+    } finally {
+      savingFeedback.current.delete(messageId);
+    }
+  }
+
+  // Enter sends, Shift+Enter adds a new line (spec 003 FR-004).
+  function onComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      if (!waiting) e.currentTarget.form?.requestSubmit();
+    }
+  }
+
   return (
-    <div className={sidebarOpen ? "layout open" : "layout"}>
-      <aside className="sidebar">
+    // `layout`/`open`, `backdrop`, `message` and `pending` are test hooks (spec 003 tasks): keep them.
+    <div className={`layout flex h-dvh bg-background text-foreground${sidebarOpen ? " open" : ""}`}>
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 w-[260px] shrink-0 overflow-y-auto border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground transition-transform md:static md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <Sidebar
           sessions={sessions}
           activeSessionId={activeSessionId}
@@ -134,35 +193,89 @@ export default function App() {
       </aside>
       {sidebarOpen && (
         // Narrow screens only (hidden by CSS otherwise): tap outside the sidebar to close it.
-        <div className="backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="backdrop fixed inset-0 z-20 bg-black/40 md:hidden"
+          aria-hidden="true"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
-      <main className="chat">
-        <header className="chat-header">
-          <button
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <Button
             type="button"
-            className="chats-toggle"
+            variant="ghost"
+            className="md:hidden"
             aria-expanded={sidebarOpen}
             onClick={() => setSidebarOpen((o) => !o)}
           >
+            <MenuIcon />
             Chats
-          </button>
-          <h1>Conversational AI</h1>
+          </Button>
+          <h1 className="text-lg font-semibold">Conversational AI</h1>
         </header>
-        <div className="messages">
-          {messages.map((m, i) => (
-            <p key={i} className={`message ${m.role}`}>
-              {m.text}
-            </p>
-          ))}
-          {waiting && <p className="pending">…</p>}
-        </div>
-        <form onSubmit={send} className="composer">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message"
-          />
-          <button disabled={waiting}>Send</button>
+
+        <MessageScrollerProvider autoScroll>
+          <MessageScroller className="flex-1">
+            <MessageScrollerViewport>
+              <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
+                {messages.map((m, i) => (
+                  <MessageScrollerItem key={`${activeSessionId}-${i}`} scrollAnchor={m.role === "user"}>
+                    <MessageRow align={m.role === "user" ? "end" : "start"}>
+                      <MessageContent>
+                        <Bubble
+                          align={m.role === "user" ? "end" : "start"}
+                          variant={m.role === "user" ? "default" : m.failed ? "destructive" : "secondary"}
+                        >
+                          <BubbleContent className="message whitespace-pre-wrap text-base">{m.text}</BubbleContent>
+                        </Bubble>
+                        {m.role === "assistant" && m.id !== undefined && (
+                          <MessageFooter>
+                            <FeedbackBar
+                              state={feedback.get(m.id)}
+                              onSubmit={(value) => void saveFeedback(m.id!, value)}
+                              onRetry={() => {
+                                const attempted = feedback.get(m.id!)?.error?.attempted;
+                                if (attempted) void saveFeedback(m.id!, attempted);
+                              }}
+                            />
+                          </MessageFooter>
+                        )}
+                      </MessageContent>
+                    </MessageRow>
+                  </MessageScrollerItem>
+                ))}
+                {waiting && (
+                  <MessageScrollerItem>
+                    <p className="pending px-3 text-muted-foreground" role="status">
+                      …<span className="sr-only">Waiting for reply</span>
+                    </p>
+                  </MessageScrollerItem>
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton>
+              <ArrowUpIcon className="rotate-180" />
+              <span className="sr-only">Scroll to latest</span>
+            </MessageScrollerButton>
+          </MessageScroller>
+        </MessageScrollerProvider>
+
+        <form onSubmit={send} className="mx-auto w-full max-w-3xl px-4 pb-4">
+          <InputGroup>
+            <InputGroupTextarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onComposerKeyDown}
+              placeholder="Type a message"
+              rows={1}
+              className="max-h-40 min-h-0 text-base"
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton type="submit" variant="default" size="icon-sm" aria-label="Send" disabled={waiting}>
+                <ArrowUpIcon />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </form>
       </main>
     </div>

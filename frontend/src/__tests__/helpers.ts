@@ -9,6 +9,12 @@ export type Server = {
   /** When set, POST /api/chat waits for this promise before answering. */
   holdChat: Promise<void> | null;
   calls: { method: string; url: string; body?: unknown }[];
+  /** Spec 004: last feedback body stored per message id. */
+  feedback: Map<number, unknown>;
+  /** Spec 004: when true, the feedback endpoint answers 500. */
+  failFeedback: boolean;
+  /** Spec 004: when set, the feedback endpoint waits for this promise before answering. */
+  holdFeedback: Promise<void> | null;
 };
 
 let nextId = 1;
@@ -47,6 +53,9 @@ export function installServer(): Server {
     failList: false,
     holdChat: null,
     calls: [],
+    feedback: new Map(),
+    failFeedback: false,
+    holdFeedback: null,
   };
 
   vi.stubGlobal(
@@ -91,7 +100,21 @@ export function installServer(): Server {
         } else {
           server.sessions.set(session_id, { title: text, messages: msgs, lastActive: clock++ });
         }
-        return json({ session_id, reply, intent: null });
+        return json({ session_id, reply, intent: null, message_id: msgs[1].id });
+      }
+
+      const fb = url.pathname.match(/^\/api\/messages\/(\d+)\/feedback$/);
+      if (method === "POST" && fb) {
+        if (server.holdFeedback) await server.holdFeedback;
+        if (server.failFeedback) return json({ detail: "boom" }, 500);
+        const id = Number(fb[1]);
+        const target = [...server.sessions.values()].flatMap((s) => s.messages).find((m) => m.id === id);
+        if (!target) return json({ detail: "message not found" }, 404);
+        if (target.role !== "assistant") return json({ detail: "feedback is only allowed on assistant messages" }, 400);
+        const { rating, reason, comment } = body as { rating: string; reason?: string; comment?: string };
+        server.feedback.set(id, body);
+        const at = new Date(Date.UTC(2026, 10, 4, 9, 0, clock++)).toISOString();
+        return json({ message_id: id, rating, reason: reason ?? null, comment: comment ?? null, trace_id: null, created_at: at, updated_at: at });
       }
 
       return json({ detail: "not found" }, 404);
