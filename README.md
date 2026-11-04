@@ -97,6 +97,9 @@ cd frontend && npm install && npm test   # vitest + jsdom, fetch is mocked (no b
 - Brand values (Principal theme) live only in `frontend/src/theme/principal.css`. Components use
   shadcn variables (`bg-primary`, `text-foreground` and so on), never hard-coded colors; a test enforces this.
   See `specs/003-shadcn-ai-elements/contracts/theme-tokens.md`.
+- Answer feedback: thumbs up/down, an optional reason and a comment under each reply, sent to
+  `POST /api/messages/{message_id}/feedback` (spec 002). Ratings are shown for the current visit only;
+  history does not return them yet. See `specs/004-answer-feedback-ui/`.
 
 ## Feature development (Spec Kit)
 

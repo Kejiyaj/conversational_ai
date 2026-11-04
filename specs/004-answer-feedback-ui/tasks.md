@@ -111,9 +111,9 @@ description: "Task list for spec 004: answer feedback in the chat UI"
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T020 [P] Add a short "Answer feedback" line to the frontend section of `README.md`: thumbs under replies use the spec 002 endpoint; ratings are kept for the visit only. API contract section unchanged
-- [ ] T021 Run `npx tsc -b`, `npm test`, `npm run build` in `frontend/`
-- [ ] T022 Run every manual step in `specs/004-answer-feedback-ui/quickstart.md` against the real backend and Postgres (including the `feedback` table check) and record results under a "Notes" heading in this file
+- [X] T020 [P] Add a short "Answer feedback" line to the frontend section of `README.md`: thumbs under replies use the spec 002 endpoint; ratings are kept for the visit only. API contract section unchanged
+- [X] T021 Run `npx tsc -b`, `npm test`, `npm run build` in `frontend/`
+- [X] T022 Run every manual step in `specs/004-answer-feedback-ui/quickstart.md` against the real backend and Postgres (including the `feedback` table check) and record results under a "Notes" heading in this file
 
 ---
 
@@ -140,3 +140,16 @@ Polish: T020 (README.md) alongside T021
 3. US2 → reasons and comments; commit
 4. US3 → re-rating; commit
 5. Polish → README, quickstart run; commit
+
+## Notes
+
+Quickstart run on 2026-11-04 (Chrome, real backend on `:8000`, Postgres `convai-db`):
+
+- Automated: `tsc -b` clean, 51/51 tests pass (31 existing unchanged; 20 new in `Feedback.test.tsx`), `npm run build` succeeds (JS 319 kB, 102 kB gzipped; +28 kB).
+- Step 1–2: thumbs under each reply only; "Helpful" stored `up` for message 32.
+- Step 3: "Not helpful" opened the follow-up; "Unclear" + comment stored `down | unclear | Didn't explain the income limits.` (message 34).
+- Step 4: switching to "Helpful" stored `up | null | <same comment>`.
+- Step 5: switching chats kept ratings; a page reload showed them unrated (known limitation).
+- Step 6: backend stopped → "Couldn't save your feedback. Retry", thumbs kept the last saved rating; after restart, Retry stored `down` with the comment and opened the follow-up.
+- Step 7: focus rings come from the shared Button/Toggle styles checked in spec 003; arrow-key movement between reasons is Radix ToggleGroup behavior and was not separately checked by hand.
+- Deviations: follow-up `open` state lives in `FeedbackBar` (see T015); the follow-up's button is "Send feedback" (see T012).
