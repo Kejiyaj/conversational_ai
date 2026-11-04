@@ -1,0 +1,275 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import App from "../App";
+import { installServer, seed, type Server } from "./helpers";
+
+const KEY = "convai.sessionIds";
+let server: Server;
+
+function storedIds(): string[] {
+  return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+}
+
+function shownMessages(): string[] {
+  return Array.from(document.querySelectorAll(".message")).map((el) => el.textContent ?? "");
+}
+
+function sidebarTitles(): string[] {
+  return Array.from(document.querySelectorAll(".session-title")).map((el) => el.textContent ?? "");
+}
+
+async function send(text: string) {
+  fireEvent.change(screen.getByPlaceholderText("Type a message"), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+}
+
+async function openChat(title: string) {
+  fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: new RegExp(title) }));
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  server = installServer();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe("US1: see and reopen a past conversation", () => {
+  it("lists this browser's stored conversations, newest first", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    seed(server, "b", [["second topic", "(mock) You said: second topic"]]);
+    seed(server, "other-browser", [["not mine", "(mock) You said: not mine"]]);
+    localStorage.setItem(KEY, JSON.stringify(["a", "b"]));
+
+    render(<App />);
+
+    await waitFor(() => expect(sidebarTitles()).toEqual(["second topic", "first topic"]));
+    expect(shownMessages()).toEqual([]); // page load opens a fresh chat
+  });
+
+  it("shows the empty state when this browser has no conversations", async () => {
+    render(<App />);
+    expect(await screen.findByText(/no past chats yet/i)).toBeTruthy();
+    expect(server.calls.filter((c) => c.url.startsWith("/api/sessions"))).toEqual([]);
+  });
+
+  it("reopens a conversation with every message in order, including mock replies", async () => {
+    seed(server, "a", [
+      ["first topic", "(mock) You said: first topic"],
+      ["more", "(mock) You said: more"],
+    ]);
+    localStorage.setItem(KEY, JSON.stringify(["a"]));
+    render(<App />);
+    await screen.findByText("first topic");
+
+    await openChat("first topic");
+
+    await waitFor(() =>
+      expect(shownMessages()).toEqual([
+        "first topic",
+        "(mock) You said: first topic",
+        "more",
+        "(mock) You said: more",
+      ]),
+    );
+    const entry = within(screen.getByRole("navigation")).getByRole("button", { name: /first topic/ });
+    expect(entry.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("keeps the current chat and offers Retry when a conversation fails to load", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    localStorage.setItem(KEY, JSON.stringify(["a"]));
+    render(<App />);
+    await screen.findByText("first topic");
+    await send("current chat");
+    await waitFor(() => expect(shownMessages()).toContain("(mock) You said: current chat"));
+
+    server.failHistory = true;
+    await openChat("first topic");
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/couldn't open/i);
+    expect(shownMessages()).toEqual(["current chat", "(mock) You said: current chat"]);
+
+    server.failHistory = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() =>
+      expect(shownMessages()).toEqual(["first topic", "(mock) You said: first topic"]),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("offers Retry when the conversation list fails to load", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    localStorage.setItem(KEY, JSON.stringify(["a"]));
+    server.failList = true;
+    render(<App />);
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/couldn't load/i);
+    server.failList = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(sidebarTitles()).toEqual(["first topic"]));
+  });
+
+  it("stores a new conversation and lists it after its first message", async () => {
+    render(<App />);
+    await screen.findByText(/no past chats yet/i);
+
+    await send("brand new");
+
+    await waitFor(() => expect(sidebarTitles()).toEqual(["brand new"]));
+    expect(storedIds()).toHaveLength(1);
+    const posted = server.calls.find((c) => c.method === "POST")!;
+    expect((posted.body as { session_id: string }).session_id).toBe(storedIds()[0]);
+  });
+});
+
+
+describe("US2: continue a reopened conversation", () => {
+  it("adds new messages to the reopened conversation and moves it to the top", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    seed(server, "b", [["second topic", "(mock) You said: second topic"]]);
+    localStorage.setItem(KEY, JSON.stringify(["b", "a"]));
+    render(<App />);
+    await waitFor(() => expect(sidebarTitles()).toEqual(["second topic", "first topic"]));
+
+    await openChat("first topic");
+    await waitFor(() => expect(shownMessages()).toHaveLength(2));
+    await send("follow-up");
+
+    await waitFor(() =>
+      expect(shownMessages()).toEqual([
+        "first topic",
+        "(mock) You said: first topic",
+        "follow-up",
+        "(mock) You said: follow-up",
+      ]),
+    );
+    const posted = server.calls.find((c) => c.method === "POST")!;
+    expect((posted.body as { session_id: string }).session_id).toBe("a");
+    expect(storedIds()).toEqual(["a", "b"]);
+    await waitFor(() => expect(sidebarTitles()).toEqual(["first topic", "second topic"]));
+  });
+
+  it("never shows a late reply in a different conversation", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    seed(server, "b", [["second topic", "(mock) You said: second topic"]]);
+    localStorage.setItem(KEY, JSON.stringify(["b", "a"]));
+    render(<App />);
+    await screen.findByText("first topic");
+    await openChat("first topic");
+    await waitFor(() => expect(shownMessages()).toHaveLength(2));
+
+    let release!: () => void;
+    server.holdChat = new Promise<void>((r) => (release = r));
+    await send("slow question");
+    await waitFor(() => expect(document.querySelector(".pending")).not.toBeNull());
+
+    await openChat("second topic");
+    await waitFor(() =>
+      expect(shownMessages()).toEqual(["second topic", "(mock) You said: second topic"]),
+    );
+    expect(document.querySelector(".pending")).toBeNull(); // A's pending reply isn't shown in B
+
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(sidebarTitles()[0]).toBe("first topic")); // A was active last
+    expect(shownMessages()).toEqual(["second topic", "(mock) You said: second topic"]);
+
+    server.holdChat = null;
+    await openChat("first topic");
+    await waitFor(() =>
+      expect(shownMessages()).toEqual([
+        "first topic",
+        "(mock) You said: first topic",
+        "slow question",
+        "(mock) You said: slow question",
+      ]),
+    );
+  });
+
+  it("shows the full thread when the user returns before a late reply arrives", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    seed(server, "b", [["second topic", "(mock) You said: second topic"]]);
+    localStorage.setItem(KEY, JSON.stringify(["b", "a"]));
+    render(<App />);
+    await screen.findByText("first topic");
+    await openChat("first topic");
+    await waitFor(() => expect(shownMessages()).toHaveLength(2));
+
+    let release!: () => void;
+    server.holdChat = new Promise<void>((r) => (release = r));
+    await send("slow question");
+    await openChat("second topic");
+    await waitFor(() => expect(shownMessages()[0]).toBe("second topic"));
+    await openChat("first topic"); // back to A before the reply; history doesn't have it yet
+    await waitFor(() => expect(shownMessages()).toEqual(["first topic", "(mock) You said: first topic"]));
+
+    server.holdChat = null;
+    await act(async () => {
+      release();
+    });
+
+    await waitFor(() =>
+      expect(shownMessages()).toEqual([
+        "first topic",
+        "(mock) You said: first topic",
+        "slow question",
+        "(mock) You said: slow question",
+      ]),
+    );
+  });
+});
+
+describe("US3: start a new conversation", () => {
+  it("clears the chat, adds nothing until the first send, and leaves the old chat unchanged", async () => {
+    seed(server, "a", [["first topic", "(mock) You said: first topic"]]);
+    localStorage.setItem(KEY, JSON.stringify(["a"]));
+    render(<App />);
+    await screen.findByText("first topic");
+    await openChat("first topic");
+    await waitFor(() => expect(shownMessages()).toHaveLength(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+
+    expect(shownMessages()).toEqual([]);
+    expect(storedIds()).toEqual(["a"]);
+    expect(sidebarTitles()).toEqual(["first topic"]);
+    const active = within(screen.getByRole("navigation")).getByRole("button", { name: /first topic/ });
+    expect(active.getAttribute("aria-current")).toBeNull();
+
+    await send("new topic");
+
+    await waitFor(() => expect(sidebarTitles()).toEqual(["new topic", "first topic"]));
+    const ids = storedIds();
+    expect(ids).toHaveLength(2);
+    expect(ids[1]).toBe("a");
+    expect(ids[0]).not.toBe("a");
+
+    await openChat("first topic");
+    await waitFor(() =>
+      expect(shownMessages()).toEqual(["first topic", "(mock) You said: first topic"]),
+    );
+  });
+});
+
+describe("narrow-screen sidebar", () => {
+  it("opens with the Chats toggle and closes when tapping outside it", async () => {
+    render(<App />);
+    await screen.findByText(/no past chats yet/i);
+    const layout = document.querySelector(".layout")!;
+
+    fireEvent.click(screen.getByRole("button", { name: "Chats" }));
+    expect(layout.classList.contains("open")).toBe(true);
+
+    fireEvent.click(document.querySelector(".backdrop")!);
+    expect(layout.classList.contains("open")).toBe(false);
+    expect(document.querySelector(".backdrop")).toBeNull();
+  });
+});

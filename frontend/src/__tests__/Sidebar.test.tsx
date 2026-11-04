@@ -1,0 +1,84 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import Sidebar from "../Sidebar";
+import type { SessionSummary } from "../api";
+
+const sessions: SessionSummary[] = [
+  {
+    session_id: "b",
+    title: "second topic",
+    created_at: "2026-11-04T09:05:00+00:00",
+    last_active_at: "2026-11-04T09:10:00+00:00",
+  },
+  {
+    session_id: "a",
+    title: "first topic",
+    created_at: "2026-11-04T09:00:00+00:00",
+    last_active_at: "2026-11-04T09:01:00+00:00",
+  },
+];
+
+function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
+  const props = {
+    sessions,
+    activeSessionId: "a",
+    onSelect: vi.fn(),
+    onNewChat: vi.fn(),
+    error: null,
+    onRetry: vi.fn(),
+    loading: false,
+    ...overrides,
+  };
+  render(<Sidebar {...props} />);
+  return props;
+}
+
+afterEach(cleanup);
+
+describe("Sidebar", () => {
+  it("lists sessions in the given order with title and last-active time", () => {
+    renderSidebar();
+    const items = screen.getAllByRole("button", { name: /topic/ });
+    expect(items.map((b) => b.querySelector(".session-title")?.textContent)).toEqual([
+      "second topic",
+      "first topic",
+    ]);
+    for (const item of items) {
+      expect(item.querySelector("time")?.getAttribute("datetime")).toBeTruthy();
+      expect(item.querySelector("time")?.textContent).not.toBe("");
+    }
+  });
+
+  it("shows an empty state when there are no sessions", () => {
+    renderSidebar({ sessions: [] });
+    expect(screen.getByText(/no past chats yet/i)).toBeTruthy();
+  });
+
+  it("marks the active session", () => {
+    renderSidebar({ activeSessionId: "a" });
+    const active = screen.getByRole("button", { name: /first topic/ });
+    const other = screen.getByRole("button", { name: /second topic/ });
+    expect(active.getAttribute("aria-current")).toBe("true");
+    expect(other.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("calls onSelect with the session id when an entry is clicked", () => {
+    const props = renderSidebar();
+    fireEvent.click(screen.getByRole("button", { name: /second topic/ }));
+    expect(props.onSelect).toHaveBeenCalledWith("b");
+  });
+
+  it("shows the error with a Retry button", () => {
+    const props = renderSidebar({ error: "Couldn't load chats." });
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load chats.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(props.onRetry).toHaveBeenCalled();
+  });
+
+  it("has a New chat button that calls onNewChat", () => {
+    const props = renderSidebar();
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    expect(props.onNewChat).toHaveBeenCalled();
+  });
+});
