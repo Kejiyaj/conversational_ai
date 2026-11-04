@@ -88,6 +88,16 @@ pytest
 cd frontend && npm install && npm test   # vitest + jsdom, fetch is mocked (no backend needed)
 ```
 
+## Frontend: UI kit and theme
+
+- UI components are [shadcn](https://ui.shadcn.com) (Radix variant) with
+  [AI Elements](https://ui.shadcn.com/docs/ai-elements) for the chat. Generated components live in
+  `frontend/src/components/ui/` and are ours to edit.
+- Add a component: `cd frontend && npx shadcn@latest add <name>`.
+- Brand values (Principal theme) live only in `frontend/src/theme/principal.css`. Components use
+  shadcn variables (`bg-primary`, `text-foreground` and so on), never hard-coded colors; a test enforces this.
+  See `specs/003-shadcn-ai-elements/contracts/theme-tokens.md`.
+
 ## Feature development (Spec Kit)
 
 New features use [Spec Kit](https://github.com/github/spec-kit), in Claude Code, from the repo root.

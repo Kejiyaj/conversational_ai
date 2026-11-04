@@ -113,9 +113,9 @@ The existing tests find elements by these hooks. Each rebuilt element MUST keep 
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T028 [P] Update the frontend section of `README.md`: shadcn (Radix) + AI Elements, how to add a component (`npx shadcn@latest add <name>`), and that brand values live only in `frontend/src/theme/principal.css`. The API contract section stays unchanged
-- [ ] T029 [P] Confirm FR-009: `git diff main --stat` shows no Principal stylesheet, font file or logo, and `frontend/src/theme/principal.css` contains only variable values
-- [ ] T030 Run every step in `specs/003-shadcn-ai-elements/quickstart.md` (automated and manual, with the backend on `:8000`) and record any deviation in this file under a "Notes" heading
+- [X] T028 [P] Update the frontend section of `README.md`: shadcn (Radix) + AI Elements, how to add a component (`npx shadcn@latest add <name>`), and that brand values live only in `frontend/src/theme/principal.css`. The API contract section stays unchanged
+- [X] T029 [P] Confirm FR-009: `git diff main --stat` shows no Principal stylesheet, font file or logo, and `frontend/src/theme/principal.css` contains only variable values
+- [X] T030 Run every step in `specs/003-shadcn-ai-elements/quickstart.md` (automated and manual, with the backend on `:8000`) and record any deviation in this file under a "Notes" heading
 
 ---
 
@@ -163,3 +163,16 @@ Then: T017 → T018 → T019
 2. US1 → rebuilt chat, same behavior, better scrolling and message box (commit)
 3. US2 → Principal theme (commit)
 4. Polish → README, FR-009 check, full quickstart run (commit, open PR to `main`)
+
+## Notes
+
+Quickstart run on 2026-11-04 (Chrome, backend on `:8000` with mock replies):
+
+- Automated: `tsc -b` clean, 31/31 tests pass (23 existing, unchanged; 8 new), `npm run build` succeeds.
+- Story 1: Enter sends, Shift+Enter adds a line, the box grows; long URL wraps in its bubble; long thread stays pinned, "scroll to latest" appears on scroll-up and returns to the end; reopening a chat works; backend down shows "Couldn't load past chats." with Retry, which recovers once the backend is back; below 768px "Chats" opens the sidebar and tapping outside closes it.
+- Story 2: primary actions and user bubbles `#005fb8`, pill buttons, light-blue replies with navy text, `#2f2f2f` text, blue focus ring on New chat, session item and message box when tabbing.
+- Deviations:
+  - The focus ring is shadcn's `ring-ring/50` (the `#3871ff` ring at 50% opacity). It is clearly visible; kept as is.
+  - The production JS bundle grew from ~224 kB to ~291 kB (93 kB gzipped) because of Radix, Message Scroller and the icons.
+  - `--font-sans` is set in `styles.css` (Tailwind's `@theme` block), not in `principal.css`. It names the font only; all colors and the radius are in `principal.css`.
+  - Changed the Vite alias from `__dirname` to `import.meta.dirname` (ESM warning) and added `test.css.include` so the theme test can read `principal.css`.
