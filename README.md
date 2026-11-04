@@ -35,3 +35,16 @@ cd frontend && npm install && npm run dev   # http://localhost:5173 (proxies /ap
 # Agent (once AWS access is set up)
 cd agent && uv run agent.py      # local AgentCore runtime on http://localhost:8080
 ```
+
+## Backend: run and test
+
+```bash
+# Run (Postgres + backend; migrations run on startup)
+docker compose up --build
+
+# Test (no Postgres needed; uses in-memory SQLite)
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
+```
