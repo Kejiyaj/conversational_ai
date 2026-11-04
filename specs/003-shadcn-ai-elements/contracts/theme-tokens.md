@@ -35,8 +35,9 @@ uncommitted reference `../principal-theme/principal-tokens.css`.
 | `--sidebar-ring` | `#3871ff` | focus indicator |
 | `--font-sans` | `'FS Elliot Web Regular', Arial, sans-serif` | `base-type-font-family-100` |
 
-**Hover:** primary buttons darken to `#004c97` (`component-button-primary-hover-background`), set in
-`button.tsx` instead of shadcn's default `bg-primary/80`.
+**Hover:** primary buttons darken to `#004c97` (`component-button-primary-hover-background`). This is an
+extra variable, `--primary-hover`, defined in `principal.css` and used by `button.tsx` in place of
+shadcn's default `bg-primary/80`.
 
 **Shape:** buttons are pills (`rounded-full`); the message box and bubbles use the 24px radius scale.
 
