@@ -23,7 +23,10 @@ class Message(Base):
         CheckConstraint("source IN ('agent', 'mock')", name="ck_messages_source"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    # The Integer variant only matters for the SQLite DB used in tests (BigInteger PKs don't autoincrement there).
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True
+    )
     session_id: Mapped[str] = mapped_column(
         Text, ForeignKey("sessions.id"), index=True, nullable=False
     )

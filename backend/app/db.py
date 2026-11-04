@@ -1,9 +1,9 @@
 import os
+from collections.abc import Iterator
 from functools import lru_cache
 
-from sqlalchemy import Engine, create_engine
-from sqlalchemy import MetaData
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import Engine, MetaData, create_engine
+from sqlalchemy.orm import DeclarativeBase, Session
 
 
 class Base(DeclarativeBase):
@@ -35,3 +35,9 @@ def get_database_url() -> str:
 @lru_cache
 def get_engine() -> Engine:
     return create_engine(get_database_url(), pool_pre_ping=True)
+
+
+def get_db() -> Iterator[Session]:
+    """FastAPI dependency: one DB session per request."""
+    with Session(get_engine()) as db:
+        yield db
