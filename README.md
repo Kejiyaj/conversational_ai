@@ -82,6 +82,22 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+## Agent: local wealth agent (Strands + Ollama)
+
+Spec: `specs/005-wealth-agent/`. Runs fully locally against Ollama (`llama3.2` by default); synthetic data, read-only tools.
+
+```bash
+ollama pull llama3.2 && ollama serve          # http://localhost:11434
+cd agent
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest                                        # unit tests, no Ollama needed
+PYTHONPATH=src python -m wealth_agent         # interactive chat
+PYTHONPATH=src python evals/run_eval.py       # live golden-case eval (needs Ollama)
+```
+
+Config: `WEALTH_AGENT_PROVIDER` (only `ollama`), `OLLAMA_HOST`, `OLLAMA_MODEL`.
+
 ## Frontend: test
 
 ```bash

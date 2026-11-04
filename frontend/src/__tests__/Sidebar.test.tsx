@@ -63,6 +63,22 @@ describe("Sidebar", () => {
     expect(other.getAttribute("aria-current")).toBeNull();
   });
 
+  it("highlights the active session with a left marker only, not a filled background", () => {
+    renderSidebar({ activeSessionId: "a" });
+    const active = screen.getByRole("button", { name: /first topic/ });
+    const other = screen.getByRole("button", { name: /second topic/ });
+    expect(active.querySelector(".session-marker")).not.toBeNull();
+    expect(other.querySelector(".session-marker")).toBeNull();
+    expect(active.className).not.toMatch(/aria-\[current=true\]:bg-/);
+  });
+
+  it("shows a pointer cursor on every chat in the list", () => {
+    renderSidebar();
+    for (const name of [/first topic/, /second topic/]) {
+      expect(screen.getByRole("button", { name }).className).toMatch(/\bcursor-pointer\b/);
+    }
+  });
+
   it("calls onSelect with the session id when an entry is clicked", () => {
     const props = renderSidebar();
     fireEvent.click(screen.getByRole("button", { name: /second topic/ }));

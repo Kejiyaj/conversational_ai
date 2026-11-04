@@ -82,7 +82,7 @@ in the Principal theme reference.
 - **FR-006**: The UI MUST use the Principal theme values for color, button and input shape, card radius, text color, type scale, and focus ring, as recorded in the Principal theme reference.
 - **FR-007**: The theme MUST be defined in one place, so later features (conversational cards) inherit it without restyling.
 - **FR-008**: All interactive controls MUST be reachable and usable by keyboard, with visible focus, and announced correctly by screen readers.
-- **FR-009**: The public repository MUST NOT contain Principal's stylesheets, font files, or logo; only the color, size, and shape values needed for the theme.
+- **FR-009**: The public repository MUST NOT contain Principal's stylesheets, font files, or logo; only the color, size, and shape values needed for the theme. *(Amended 2026-11-04 by spec 005: a placeholder "PFG" text wordmark drawn from theme variables is allowed; it is not Principal's logo artwork.)*
 - **FR-010**: The frontend ↔ backend contract MUST NOT change.
 
 ## Success Criteria *(mandatory)*
@@ -99,8 +99,8 @@ in the Principal theme reference.
 
 - The component kit is shadcn with AI Elements, using the Radix UI variant; this was chosen by the frontend owner. It applies to the chat UI only. The backend and agent are unaffected.
 - The Principal theme reference lives outside the repo (`../principal-theme/`); only the needed values are copied in.
-- No Principal logo or product name is shown; the title stays "Conversational AI".
+- ~~No Principal logo or product name is shown; the title stays "Conversational AI".~~ Superseded 2026-11-04 by spec 005 (product owner decision): the header shows a placeholder "PFG" wordmark and the title "PFG Wealth Assistant". Swap in an approved brand asset when one exists.
 - Principal's font (FS Elliot) is licensed; the theme uses its own documented fallback (Arial).
-- Light mode only for the POC; dark mode is out of scope.
+- ~~Light mode only for the POC; dark mode is out of scope.~~ Superseded 2026-11-04 by spec 005: a dark palette follows the system setting, and the brand family moved from Principal blue to navy (product owner decision).
 - Interactive conversational cards (Nov 11 milestone), answer feedback controls (spec 002 UI), and document upload are out of scope; this spec prepares the base they will use.
 - Web only; React Native/mobile app is out of scope for this spec.

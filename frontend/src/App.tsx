@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpIcon, MenuIcon } from "lucide-react";
+import { ArrowUpIcon, InfoIcon, MenuIcon } from "lucide-react";
 
 import { getHistory, listSessions, sendMessage, submitFeedback, type Feedback, type SessionSummary } from "./api";
 import { getSessionIds, rememberSession } from "./sessionStore";
 import FeedbackBar, { type FeedbackState } from "./FeedbackBar";
+import { AssistantAvatar, Logo } from "./Logo";
+import { Markdown } from "./markdown";
+import { splitDisclaimer } from "./messageText";
 import Sidebar from "./Sidebar";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -22,6 +25,14 @@ import {
 // `id` is the backend message id; replies with one can be rated (spec 004).
 type Message = { id?: number; role: "user" | "assistant"; text: string; failed?: boolean };
 type SidebarError = { message: string; retry: () => void };
+
+// One click sends these from the welcome screen (spec 005).
+const SUGGESTIONS = [
+  "What is my portfolio worth?",
+  "How does my allocation compare to my target?",
+  "Do I need to rebalance?",
+  "Project $500 a month at 6% for 20 years",
+];
 
 export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string>(() => crypto.randomUUID());
@@ -99,10 +110,14 @@ export default function App() {
     setSidebarOpen(false);
   }
 
-  async function send(e: React.FormEvent) {
+  function send(e: React.FormEvent) {
     e.preventDefault();
-    const text = input.trim();
-    if (!text) return;
+    void sendText(input);
+  }
+
+  async function sendText(raw: string) {
+    const text = raw.trim();
+    if (!text || pending.has(activeSessionId)) return;
     const sessionId = activeSessionId;
     const version = viewVersion.current;
     setMessages((m) => [...m, { role: "user", text }]);
@@ -175,109 +190,173 @@ export default function App() {
 
   return (
     // `layout`/`open`, `backdrop`, `message` and `pending` are test hooks (spec 003 tasks): keep them.
-    <div className={`layout flex h-dvh bg-background text-foreground${sidebarOpen ? " open" : ""}`}>
-      <aside
-        className={`fixed inset-y-0 left-0 z-30 w-[260px] shrink-0 overflow-y-auto border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground transition-transform md:static md:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <Sidebar
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          onSelect={(id) => void openSession(id)}
-          onNewChat={newChat}
-          error={sidebarError?.message ?? null}
-          onRetry={() => sidebarError?.retry()}
-          loading={sessionsLoading}
-        />
-      </aside>
-      {sidebarOpen && (
-        // Narrow screens only (hidden by CSS otherwise): tap outside the sidebar to close it.
-        <div
-          className="backdrop fixed inset-0 z-20 bg-black/40 md:hidden"
-          aria-hidden="true"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <Button
-            type="button"
-            variant="ghost"
-            className="md:hidden"
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen((o) => !o)}
-          >
-            <MenuIcon />
-            Chats
-          </Button>
-          <h1 className="text-lg font-semibold">Conversational AI</h1>
-        </header>
-
-        <MessageScrollerProvider autoScroll>
-          <MessageScroller className="flex-1">
-            <MessageScrollerViewport>
-              <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
-                {messages.map((m, i) => (
-                  <MessageScrollerItem key={`${activeSessionId}-${i}`} scrollAnchor={m.role === "user"}>
-                    <MessageRow align={m.role === "user" ? "end" : "start"}>
-                      <MessageContent>
-                        <Bubble
-                          align={m.role === "user" ? "end" : "start"}
-                          variant={m.role === "user" ? "default" : m.failed ? "destructive" : "secondary"}
-                        >
-                          <BubbleContent className="message whitespace-pre-wrap text-base">{m.text}</BubbleContent>
-                        </Bubble>
-                        {m.role === "assistant" && m.id !== undefined && (
-                          <MessageFooter>
-                            <FeedbackBar
-                              state={feedback.get(m.id)}
-                              onSubmit={(value) => void saveFeedback(m.id!, value)}
-                              onRetry={() => {
-                                const attempted = feedback.get(m.id!)?.error?.attempted;
-                                if (attempted) void saveFeedback(m.id!, attempted);
-                              }}
+    <div className={`layout flex h-dvh flex-col bg-background text-foreground${sidebarOpen ? " open" : ""}`}>
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background px-4 py-2.5">
+        <Button
+          type="button"
+          variant="ghost"
+          className="md:hidden"
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen((o) => !o)}
+        >
+          <MenuIcon />
+          Chats
+        </Button>
+        <Logo />
+        <div className="flex min-w-0 flex-col leading-tight">
+          <h1 className="text-lg font-semibold">PFG Wealth Assistant</h1>
+          <span className="text-xs text-muted-foreground">AI assistant · Demo data</span>
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 w-[260px] shrink-0 overflow-y-auto border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground transition-transform md:static md:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <Sidebar
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelect={(id) => void openSession(id)}
+            onNewChat={newChat}
+            error={sidebarError?.message ?? null}
+            onRetry={() => sidebarError?.retry()}
+            loading={sessionsLoading}
+          />
+        </aside>
+        {sidebarOpen && (
+          // Narrow screens only (hidden by CSS otherwise): tap outside the sidebar to close it.
+          <div
+            className="backdrop fixed inset-0 z-40 bg-black/40 md:hidden"
+            aria-hidden="true"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        <main className="flex min-w-0 flex-1 flex-col">
+          <MessageScrollerProvider autoScroll>
+            <MessageScroller className="flex-1">
+              <MessageScrollerViewport>
+                <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
+                  {messages.length === 0 && !waiting && (
+                    <section className="flex flex-col items-center px-2 pt-[8vh] pb-4 text-center">
+                      <Logo size={56} />
+                      <h2 className="mt-4 mb-1.5 text-2xl font-semibold">How can I help with your portfolio today?</h2>
+                      <p className="mb-6 max-w-md text-muted-foreground">
+                        Ask about your holdings, allocation, rebalancing or savings projections. Answers use demo
+                        data and are for information only.
+                      </p>
+                      <div className="grid w-full max-w-xl grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        {SUGGESTIONS.map((s) => (
+                          <Button
+                            key={s}
+                            type="button"
+                            variant="outline"
+                            className="h-auto justify-start rounded-xl px-4 py-3 text-left whitespace-normal"
+                            onClick={() => void sendText(s)}
+                          >
+                            {s}
+                          </Button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {messages.map((m, i) => (
+                    <MessageScrollerItem key={`${activeSessionId}-${i}`} scrollAnchor={m.role === "user"}>
+                      <MessageRow align={m.role === "user" ? "end" : "start"}>
+                        {m.role === "assistant" && <AssistantAvatar />}
+                        <MessageContent>
+                          {m.role === "user" ? (
+                            <Bubble align="end" variant="default">
+                              <BubbleContent className="message whitespace-pre-wrap text-base">{m.text}</BubbleContent>
+                            </Bubble>
+                          ) : (
+                            <AssistantReply text={m.text} failed={m.failed} />
+                          )}
+                          {m.role === "assistant" && m.id !== undefined && (
+                            <MessageFooter>
+                              <FeedbackBar
+                                state={feedback.get(m.id)}
+                                onSubmit={(value) => void saveFeedback(m.id!, value)}
+                                onRetry={() => {
+                                  const attempted = feedback.get(m.id!)?.error?.attempted;
+                                  if (attempted) void saveFeedback(m.id!, attempted);
+                                }}
+                              />
+                            </MessageFooter>
+                          )}
+                        </MessageContent>
+                      </MessageRow>
+                    </MessageScrollerItem>
+                  ))}
+                  {waiting && (
+                    <MessageScrollerItem>
+                      <MessageRow align="start">
+                        <AssistantAvatar />
+                        <p className="pending flex items-center gap-1.5 px-1 py-3" role="status">
+                          {["[animation-delay:-0.3s]", "[animation-delay:-0.15s]", ""].map((delay) => (
+                            <span
+                              key={delay}
+                              className={`size-2 animate-bounce rounded-full bg-muted-foreground motion-reduce:animate-none ${delay}`}
                             />
-                          </MessageFooter>
-                        )}
-                      </MessageContent>
-                    </MessageRow>
-                  </MessageScrollerItem>
-                ))}
-                {waiting && (
-                  <MessageScrollerItem>
-                    <p className="pending px-3 text-muted-foreground" role="status">
-                      …<span className="sr-only">Waiting for reply</span>
-                    </p>
-                  </MessageScrollerItem>
-                )}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <MessageScrollerButton>
-              <ArrowUpIcon className="rotate-180" />
-              <span className="sr-only">Scroll to latest</span>
-            </MessageScrollerButton>
-          </MessageScroller>
-        </MessageScrollerProvider>
+                          ))}
+                          <span className="sr-only">Waiting for reply</span>
+                        </p>
+                      </MessageRow>
+                    </MessageScrollerItem>
+                  )}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton>
+                <ArrowUpIcon className="rotate-180" />
+                <span className="sr-only">Scroll to latest</span>
+              </MessageScrollerButton>
+            </MessageScroller>
+          </MessageScrollerProvider>
 
-        <form onSubmit={send} className="mx-auto w-full max-w-3xl px-4 pb-4">
-          <InputGroup>
-            <InputGroupTextarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onComposerKeyDown}
-              placeholder="Type a message"
-              rows={1}
-              className="max-h-40 min-h-0 text-base"
-            />
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton type="submit" variant="default" size="icon-sm" aria-label="Send" disabled={waiting}>
-                <ArrowUpIcon />
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-        </form>
-      </main>
+          <form onSubmit={send} className="mx-auto w-full max-w-3xl px-4 pb-4">
+            <InputGroup>
+              <InputGroupTextarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onComposerKeyDown}
+                placeholder="Type a message"
+                rows={1}
+                className="max-h-40 min-h-0 text-base"
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton type="submit" variant="default" size="icon-sm" aria-label="Send" disabled={waiting}>
+                  <ArrowUpIcon />
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+            <p className="mt-1.5 text-center text-xs text-muted-foreground">
+              Enter to send · Shift+Enter for a new line. AI answers can be wrong; check important figures.
+            </p>
+          </form>
+        </main>
+      </div>
     </div>
+  );
+}
+
+// Assistant reply: Markdown in the bubble, and a trailing _italic_ disclaimer as a muted note below it.
+function AssistantReply({ text, failed }: { text: string; failed?: boolean }) {
+  const { body, disclaimer } = splitDisclaimer(text);
+  return (
+    <>
+      {body && (
+        <Bubble align="start" variant={failed ? "destructive" : "secondary"}>
+          <BubbleContent className="message text-base [&_li+li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-0 [&_p+p]:mt-2 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+            <Markdown text={body} />
+          </BubbleContent>
+        </Bubble>
+      )}
+      {disclaimer && (
+        <p className="disclaimer flex max-w-[80%] items-start gap-1.5 px-3 text-xs leading-snug text-muted-foreground">
+          <InfoIcon aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+          <span>{disclaimer}</span>
+        </p>
+      )}
+    </>
   );
 }

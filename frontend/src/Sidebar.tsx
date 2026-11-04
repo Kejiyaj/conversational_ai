@@ -44,6 +44,11 @@ export default function Sidebar({
       {sessions.length === 0 && !loading && !error && (
         <p className="px-2 text-sm text-muted-foreground">No past chats yet.</p>
       )}
+      {sessions.length > 0 && (
+        <h2 className="mt-2 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Recent chats
+        </h2>
+      )}
       {/* `session-title` is a test hook (spec 003 tasks): keep it. */}
       <ul className="flex flex-col gap-1">
         {sessions.map((s) => (
@@ -51,10 +56,17 @@ export default function Sidebar({
             <Button
               type="button"
               variant="ghost"
-              className="h-auto w-full flex-col items-start gap-0.5 px-3 py-2 text-left whitespace-normal aria-[current=true]:bg-sidebar-accent aria-[current=true]:text-sidebar-accent-foreground"
+              className="relative h-auto w-full cursor-pointer flex-col items-start gap-0.5 rounded-xl py-2 pr-3 pl-4 text-left whitespace-normal"
               aria-current={s.session_id === activeSessionId ? "true" : undefined}
               onClick={() => onSelect(s.session_id)}
             >
+              {/* The selected chat gets a rounded bar on its left edge instead of a filled background. */}
+              {s.session_id === activeSessionId && (
+                <span
+                  aria-hidden="true"
+                  className="session-marker absolute inset-y-1.5 left-1 w-1 rounded-full bg-primary"
+                />
+              )}
               <span className="session-title w-full truncate font-medium">{s.title}</span>
               <time className="text-xs text-muted-foreground" dateTime={s.last_active_at}>
                 {timeFormat.format(new Date(s.last_active_at))}
