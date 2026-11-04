@@ -38,3 +38,37 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class Feedback(Base):
+    """A user's rating of one assistant message. At most one row per message."""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint("rating IN ('up', 'down')", name="ck_feedback_rating"),
+        # Only the stable rules are in the database. The provisional reason list and the comment
+        # length limit are enforced in app/feedback.py (research R3).
+        CheckConstraint("reason IS NULL OR rating = 'down'", name="ck_feedback_reason_requires_down"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), Identity(), primary_key=True
+    )
+    message_id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        ForeignKey("messages.id"),
+        unique=True,
+        nullable=False,
+    )
+    # NOT NULL today because every row is a user rating. Relaxing it later (for escalation records)
+    # is one ALTER COLUMN ... DROP NOT NULL; both check constraints already accept a NULL rating.
+    rating: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    comment: Mapped[str | None] = mapped_column(Text)
+    trace_id: Mapped[str | None] = mapped_column(Text)  # filled in once agent tracing exists
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

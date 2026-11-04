@@ -38,7 +38,7 @@ Python 3.12 venv from the README.
 
 **Purpose**: Know the starting point. There are no new dependencies and no new tooling.
 
-- [ ] T001 Confirm a clean baseline. In `backend/`, with the venv from `requirements-dev.txt`,
+- [X] T001 Confirm a clean baseline. In `backend/`, with the venv from `requirements-dev.txt`,
   run `pytest` and check that every existing test passes. Write down the number of tests, to
   compare with T027.
 
@@ -51,7 +51,7 @@ needs these.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Create `backend/tests/test_feedback.py` with shared helpers and the table-rule
+- [X] T002 Create `backend/tests/test_feedback.py` with shared helpers and the table-rule
   tests, and confirm they fail (the model doesn't exist yet). The helpers: `send_chat(client,
   session_id="s1", message="hello")` returns the `message_id` from the chat response, and
   `user_message_id(client, session_id)` reads the user message's id from
@@ -63,9 +63,9 @@ needs these.
     is accepted with either rating (`ck_feedback_reason_requires_down`: `reason IS NULL OR rating = 'down'`).
   - `trace_id` is `NULL` when not given, and `created_at` and `updated_at` are filled in.
   - A `message_id` that doesn't exist in `messages` is rejected (`fk_feedback_message_id`).
-- [ ] T003 [P] In `backend/app/db.py`, add `"uq": "uq_%(table_name)s_%(column_0_name)s"` to the
+- [X] T003 [P] In `backend/app/db.py`, add `"uq": "uq_%(table_name)s_%(column_0_name)s"` to the
   `naming_convention` of `Base.metadata`. Keep the `ix`, `pk` and `fk` entries as they are.
-- [ ] T004 Add the `Feedback` model to `backend/app/models.py`, table `feedback`, exactly as in
+- [X] T004 Add the `Feedback` model to `backend/app/models.py`, table `feedback`, exactly as in
   data-model.md:
   - `id` bigint identity primary key, with the `Integer` SQLite variant as on `Message.id`.
   - `message_id` bigint, `NOT NULL`, foreign key to `messages.id` (no cascade), `unique=True`.
@@ -79,12 +79,12 @@ needs these.
     `CheckConstraint("reason IS NULL OR rating = 'down'", name="ck_feedback_reason_requires_down")`.
   - No check on the values of `reason`, and no length check on `comment` (research R3).
   Run the T002 tests and check that they pass. (Depends on T002 and T003.)
-- [ ] T005 Create `backend/alembic/versions/0002_create_feedback.py` (`revision = "0002"`,
+- [X] T005 Create `backend/alembic/versions/0002_create_feedback.py` (`revision = "0002"`,
   `down_revision = "0001"`). `upgrade()` creates `feedback` with the same columns and the
   constraint names `pk_feedback`, `fk_feedback_message_id`, `uq_feedback_message_id`,
   `ck_feedback_rating` and `ck_feedback_reason_requires_down`. `downgrade()` drops the table.
   Follow the style of `0001_create_sessions_and_messages.py`. (Depends on T004.)
-- [ ] T006 Create `backend/app/feedback.py` with no routes yet:
+- [X] T006 Create `backend/app/feedback.py` with no routes yet:
   - `REASONS = ("incorrect", "unclear", "wanted_a_person", "other")`. This is the provisional
     list (FR-004), and it lives only here.
   - `MAX_COMMENT_CHARS = 1000`.
@@ -94,7 +94,7 @@ needs these.
   - `router = APIRouter()`.
   In `backend/app/main.py`, add `app.include_router(feedback.router)`. Check that the app still
   imports and the existing tests still pass. (Depends on T004.)
-- [ ] T007 Verify the migration in Docker (quickstart.md, step 2). Run
+- [X] T007 Verify the migration in Docker (quickstart.md, step 2). Run
   `docker compose up --build -d`. Check that the backend logs show `0001 -> 0002`, that
   `docker compose exec backend alembic check` prints "No new upgrade operations detected.",
   and that `docker compose exec db psql -U app -d convai -c '\d feedback'` shows the columns,
@@ -132,12 +132,12 @@ exists for that message.
 
 ### Tests for User Story 1 (write first, confirm they fail)
 
-- [ ] T008 [US1] In `backend/tests/test_chat.py`, update the two assertions that compare the
+- [X] T008 [US1] In `backend/tests/test_chat.py`, update the two assertions that compare the
   whole chat response (`test_mock_fallback_when_agent_url_empty` and
   `test_agent_reply_is_stored_with_source_agent`). Keep their `session_id`, `reply` and
   `intent` checks, and check that `message_id` is also present. These are the only edits to
   existing tests (SC-006).
-- [ ] T009 [US1] In `backend/tests/test_chat.py`, add tests for contract point 1:
+- [X] T009 [US1] In `backend/tests/test_chat.py`, add tests for contract point 1:
   - The response has exactly the keys `session_id`, `reply`, `intent` and `message_id`.
   - `message_id` is an integer and is never `null` today (the contract types it `integer | null`).
   - `message_id` equals the id of the stored **assistant** message, for a mock reply and, with
@@ -145,7 +145,7 @@ exists for that message.
   - It is not the id of the user's message.
   - Two turns in one session return different `message_id`s.
   (Depends on T008.)
-- [ ] T010 [US1] In `backend/tests/test_feedback.py`, add happy-path tests (contract points
+- [X] T010 [US1] In `backend/tests/test_feedback.py`, add happy-path tests (contract points
   2 and 3, FR-009, FR-010, FR-015):
   - Rating `up` and rating `down` each return 200 with `message_id`, `rating`, `reason: null`,
     `comment: null`, `trace_id: null`, `created_at` and `updated_at`, and store exactly one row
@@ -159,7 +159,7 @@ exists for that message.
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] In `backend/app/main.py`, add `message_id: int | None` to `ChatResponse`, as
+- [X] T011 [US1] In `backend/app/main.py`, add `message_id: int | None` to `ChatResponse`, as
   the contract types it (Principle I: new fields are nullable or optional). It is always set to
   the assistant message's id, and `null` is reserved for a future flow with no assistant
   message. Do not give it a default, so a missing id would show up as a validation error
@@ -168,7 +168,7 @@ exists for that message.
   message's `id`, then commits and returns the id. The `chat` handler passes it into
   `ChatResponse`. Both messages stay in one transaction, and the user message id is not
   exposed. Run T008 and T009 and check that they pass. (Depends on T009.)
-- [ ] T012 [US1] In `backend/app/feedback.py`, add the route `POST /api/messages/{message_id}/feedback`
+- [X] T012 [US1] In `backend/app/feedback.py`, add the route `POST /api/messages/{message_id}/feedback`
   as a plain sync `def`, with `response_model=FeedbackResponse`. For now: take `message_id` as
   a string and convert it to an integer, read `rating` from the JSON body, load the
   `Message` with `db.get`, insert a `Feedback(message_id=…, rating=…)` and commit, and return
@@ -189,7 +189,7 @@ bad rating and a bad body. Each returns the status and `detail` from the contrac
 
 ### Tests for User Story 2 (write first, confirm they fail)
 
-- [ ] T013 [US2] In `backend/tests/test_feedback.py`, add refusal tests (contract points 4, 5,
+- [X] T013 [US2] In `backend/tests/test_feedback.py`, add refusal tests (contract points 4, 5,
   6, 9 and 13). Each one also checks that the `feedback` table is empty afterwards and that
   the message count is unchanged (FR-012, FR-014). Use these exact responses:
   - `message_id` of `abc`, `1.5`, `-1`, `0`, `007` or a 19-digit number returns 400
@@ -210,7 +210,7 @@ bad rating and a bad body. Each returns the status and `detail` from the contrac
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] In `backend/app/feedback.py`, add the validation from
+- [X] T014 [US2] In `backend/app/feedback.py`, add the validation from
   contracts/feedback-api.md, in this order, first failure wins:
   - A small async dependency, `raw_body`, that returns `await request.body()`, so the handler
     stays a sync `def`.
@@ -241,7 +241,7 @@ first.
 
 ### Tests for User Story 3 (write first, confirm they fail)
 
-- [ ] T015 [US3] In `backend/tests/test_feedback.py`, add reason tests (contract point 7,
+- [X] T015 [US3] In `backend/tests/test_feedback.py`, add reason tests (contract point 7,
   FR-003, FR-004):
   - Parametrize over `feedback.REASONS`, so the test follows the list. With `rating` `down`,
     each value returns 200 and is stored and returned as `reason`.
@@ -255,7 +255,7 @@ first.
 
 ### Implementation for User Story 3
 
-- [ ] T016 [US3] In `backend/app/feedback.py`, validate `reason` when it is present and not
+- [X] T016 [US3] In `backend/app/feedback.py`, validate `reason` when it is present and not
   `None`: it must be a `str` in `REASONS`, otherwise 400 with the message built from `REASONS`
   (`"reason must be one of: " + ", ".join(REASONS)`). Run this check before the "reason with
   `up`" check from T014. Store `reason` on the row and return it. Run T015 and check that it
@@ -275,7 +275,7 @@ with no comment for another. Both return 200, and the comment is stored only for
 
 ### Tests for User Story 4 (write first, confirm they fail)
 
-- [ ] T017 [US4] In `backend/tests/test_feedback.py`, add comment tests (contract point 8,
+- [X] T017 [US4] In `backend/tests/test_feedback.py`, add comment tests (contract point 8,
   FR-005, FR-006):
   - A comment is accepted with `up` and with `down`, and is stored and returned unchanged.
   - A comment with leading and trailing spaces is stored exactly as submitted.
@@ -288,7 +288,7 @@ with no comment for another. Both return 200, and the comment is stored only for
 
 ### Implementation for User Story 4
 
-- [ ] T018 [US4] In `backend/app/feedback.py`, validate `comment` after `reason`: absent or
+- [X] T018 [US4] In `backend/app/feedback.py`, validate `comment` after `reason`: absent or
   `None` means no comment. If it is not a `str`, return 400 `comment must be a string`. If it
   is empty or only whitespace (`not comment.strip()`), store `None`. Otherwise, if
   `len(comment) > MAX_COMMENT_CHARS`, return 400 `comment must be at most 1000 characters`
@@ -312,7 +312,7 @@ remains, with rating `up` and no reason and no comment.
 
 ### Tests for User Story 5 (write first, confirm they fail)
 
-- [ ] T019 [US5] In `backend/tests/test_feedback.py`, add replacement tests (contract points
+- [X] T019 [US5] In `backend/tests/test_feedback.py`, add replacement tests (contract points
   10, 11 and 12, FR-012, FR-013, SC-004):
   - A second submission with different values returns 200 and leaves one row with the new
     values.
@@ -330,7 +330,7 @@ remains, with rating `up` and no reason and no comment.
 
 ### Implementation for User Story 5
 
-- [ ] T020 [US5] In `backend/app/feedback.py`, add `find_feedback(db, message_id)` and
+- [X] T020 [US5] In `backend/app/feedback.py`, add `find_feedback(db, message_id)` and
   `save_feedback(db, message_id, data)`. `save_feedback` looks up the existing row. If there
   is one, it assigns `rating`, `reason` and `comment` (assigning every field, so an omitted
   `reason` or `comment` becomes `None`, and assigning equal values makes no `UPDATE`, so
@@ -347,24 +347,24 @@ remains, with rating `up` and no reason and no comment.
 
 **Purpose**: Documentation, the full-suite check, end-to-end validation and review.
 
-- [ ] T021 [P] Update the API contract section of `README.md` in the same change (FR-022,
+- [X] T021 [P] Update the API contract section of `README.md` in the same change (FR-022,
   Principle I): show `message_id` (integer or null, always an integer today) in the
   `POST /api/chat` response, and document
   `POST /api/messages/{message_id}/feedback` with its request, its 200 response and the 400
   and 404 cases. State that `trace_id` is always `null` for now and that the reason list is
   provisional. Keep the existing wording of the other endpoints.
-- [ ] T022 Run the full backend suite with `pytest`. Check that every test from T001 still
+- [X] T022 Run the full backend suite with `pytest`. Check that every test from T001 still
   passes, that the only edits to existing tests are the two assertions from T008, and that all
   new tests pass (SC-006).
-- [ ] T023 [P] Run `cd frontend && npm test` and check that it passes without any frontend
+- [X] T023 [P] Run `cd frontend && npm test` and check that it passes without any frontend
   change (SC-006: existing clients are unaffected).
-- [ ] T024 Run the end-to-end check in `quickstart.md` (steps 2 and 3, and the manual
+- [X] T024 Run the end-to-end check in `quickstart.md` (steps 2 and 3, and the manual
   scenarios in step 4) against Docker. Start with `docker compose down -v` for a clean
   database. Check each expected status and body, the single stored row, that `updated_at`
   is the same before and after the identical resubmission, and `alembic check`. Then run
   `docker compose restart backend` and check that the feedback row is still there
   (SC-002, stored after a restart). (Depends on T022.)
-- [ ] T025 Check the implementation against the spec, as `CLAUDE.md` asks when the Superpowers
+- [X] T025 Check the implementation against the spec, as `CLAUDE.md` asks when the Superpowers
   skills are not available. Run `/speckit-analyze`, then `/speckit-converge`, and fix or
   record every finding. (Depends on T024.)
 - [ ] T026 Open the pull request. Request review from Vinod, because the chat response gains
@@ -458,3 +458,30 @@ the `ChatResponse` type in `frontend/src/api.ts`) is a separate spec and can sta
 - Deferred, not tasks here: the thumbs UI (frontend spec), reading and reporting on feedback,
   recording escalation reasons as feedback, rating individual recommendation cards, and filling
   in `trace_id`.
+
+## Phase 9: Convergence
+
+Added by `/speckit-converge` (T025). Out of scope here and tracked elsewhere: `POST /api/chat`
+also returns 500 for a message containing a null character. That comes from the earlier
+persistence feature, and will be fixed on a separate branch after this one merges.
+
+- [X] T027 Fix the 500s on input the database can't store, per Technology constraint "invalid
+  client input returns 400" (FR-006, FR-020, SC-003) (contradicts, HIGH). Tests first, in
+  `backend/tests/test_feedback.py`: a comment with a null character (`"a\u0000b"`, `"\u0000"`)
+  or an unpaired surrogate (`"a\ud800b"`, `"\udc00"`, `"\ud83d"`) returns 400
+  `comment must not contain null or unpaired surrogate characters`, a valid emoji pair is
+  accepted, the check runs after the string check and before the length check, and a body
+  nested 200,000 deep returns 400 `request body must be a JSON object`. Then, in
+  `backend/app/feedback.py`, add `is_storable` and use it in `parse_feedback_body`, and catch
+  `RecursionError` next to `ValueError`. Update the contract (new case 7, test point 15), the
+  spec (FR-006 and edge cases), the data model, and quickstart step 3.
+  **The null-character and surrogate cases can only be proven on Postgres.** SQLite accepts a
+  null character, so the pytest cases guard the rule but can't reproduce the 500. Check them
+  against Docker Postgres with the curl lines in quickstart step 3 (null character, unpaired
+  surrogate and deep body each return 400, with no 500 in the logs).
+- [X] T028 Loosen the contract wording for the request body, per contracts/feedback-api.md
+  "Content-Type: application/json" (partial, MEDIUM): the header is recommended, not required,
+  matching the other endpoints. Add a test that a body without a `Content-Type` header is
+  accepted. No code change.
+- [X] T029 Fix two stale statements (LOW): in `plan.md`, the project-structure line that said
+  `tasks.md` was "not created yet", and in `spec.md`, the Status that said "Draft".

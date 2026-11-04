@@ -79,7 +79,7 @@ specs/002-answer-feedback/
 │   └── feedback-api.md  # Phase 1
 ├── checklists/
 │   └── requirements.md
-└── tasks.md             # Phase 2 (/speckit-tasks; not created yet)
+└── tasks.md             # Phase 2 (/speckit-tasks), plus the convergence phase
 ```
 
 ### Source Code (repository root)

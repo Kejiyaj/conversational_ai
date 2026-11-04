@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: User description: "Answer feedback, per requirement C.9.4.1-S1 (Feature list & key user stories) and "Feedback loop" (Feature listv02) in the requirements workbook. Backend: POST /api/messages/{message_id}/feedback. Rating "up" or "down". On "down", an optional reason from: incorrect, unclear, wanted_a_person, other (list pending approval). Optional free-text comment. Store in a new feedback table linked to the message (the turn). Add a nullable trace_id, to be populated once agent tracing exists. Only assistant messages can receive feedback. Add message_id to the POST /api/chat response as an additive field; existing fields unchanged. Out of scope: recording escalation reasons as feedback (needs escalation), feedback in history. Open question: should recommendation cards also be rateable?"
 
@@ -158,6 +158,9 @@ reason and no comment.
 - **Message id that is not a positive whole number of at most 18 digits** (for example `abc`,
   `-1`, `0` or a 19-digit number): refused with a clear message.
 - **Comment at exactly the maximum length**: accepted. One character over: refused.
+- **Comment with a null character or an unpaired surrogate**: refused with a clear message,
+  because the database can't store it. A valid emoji is accepted.
+- **A request body nested absurdly deep**: refused as not a JSON object, not a server error.
 - **Two submissions for the same answer at nearly the same moment**: the answer ends up with
   exactly one feedback record, holding the values of whichever submission was processed last.
 - **Feedback for a fallback answer**: accepted. The feedback data can still be told apart
@@ -195,7 +198,9 @@ reason and no comment.
   comment with "up" is an addition beyond the sources, which mention a comment only on
   "down".
 - **FR-006**: A comment MUST be at most 1000 characters long. A longer comment MUST be refused
-  with a client error and a clear message, and nothing is stored.
+  with a client error and a clear message, and nothing is stored. A comment the database
+  can't store (one with a null character or an unpaired surrogate) MUST be refused the same
+  way, and MUST NOT cause a server error.
 - **FR-007**: The system MUST accept feedback only for assistant messages. Feedback for a user
   message MUST be refused with a client error and a clear message, and nothing is stored.
 - **FR-008**: If no message exists with the given id, the system MUST report "not found" and

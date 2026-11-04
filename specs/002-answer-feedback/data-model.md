@@ -50,7 +50,7 @@ sessions 1 ──< messages 1 ──0..1 feedback
 | body | a JSON object | 400 |
 | `rating` | the string `up` or `down`, exactly | 400 |
 | `reason` | absent or `null`: no reason. Otherwise a string in `REASONS`, and the rating must be `down` | 400 |
-| `comment` | absent or `null`: no comment. Otherwise a string. Empty or whitespace-only: no comment. At most 1000 characters. | 400 |
+| `comment` | absent or `null`: no comment. Otherwise a string with no null character and no unpaired surrogate (the database can't store them). Empty or whitespace-only: no comment. At most 1000 characters. | 400 |
 | `trace_id` | not read from the request. A `trace_id` key in the body is ignored. | none |
 | the message | must exist, and `role = 'assistant'` | 404 / 400 |
 

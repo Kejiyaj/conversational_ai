@@ -8,9 +8,14 @@ This guide proves the feature works from end to end. The API shape is in
 
 - Docker is running. Nothing else is needed for the API checks.
 - The curl sequence below uses message ids 1 and 2, which is what a fresh database gives. To
-  start fresh, run `docker compose down -v` first. This deletes all Postgres data. On an
-  existing database, use the `message_id` the chat call returns instead of 2, and the id of
-  the user message instead of 1.
+  start fresh, run `docker compose down -v` first. On an existing database, use the
+  `message_id` the chat call returns instead of 2, and the id of the user message instead of 1.
+
+> **Warning: `docker compose down -v` deletes your local Postgres data.** The `-v` flag removes
+> the `pgdata` volume, so every session, message and feedback row in the local database is
+> lost, and the next `docker compose up` recreates an empty database. Use it only when you
+> are happy to lose that data. To stop the stack and keep the data, run `docker compose down`
+> without `-v`.
 - For the automated tests: a Python 3.12 venv in `backend/` with `requirements-dev.txt`
   installed (see the README, "Backend: run and test").
 
@@ -82,6 +87,12 @@ curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"up","reason":"incorrect"}'   # reason with up → 400
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"down","reason":"wrong"}'     # unlisted reason → 400
 curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d 'not json'                        # bad body → 400
+
+# Inputs the database can't store: each must be a 400, never a 500. This check needs Postgres:
+# SQLite accepts a null character, so the pytest suite can't prove it.
+curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"up","comment":"a\u0000b"}'   # null character → 400
+curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"up","comment":"a\ud800b"}'   # unpaired surrogate → 400
+python3 -c "print('[' * 200000)" | curl -s -w ' [%{http_code}]\n' -X POST localhost:8000/api/messages/2/feedback -H "$J" --data-binary @-   # absurdly deep body → 400
 
 # A trace_id sent by a client is ignored
 curl -s -X POST localhost:8000/api/messages/2/feedback -H "$J" -d '{"rating":"down","trace_id":"abc"}'   # → "trace_id":null

@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from app import models
+from app import feedback, models
 from app.agent import AgentError, call_agent
 from app.db import get_db
 
@@ -17,6 +17,7 @@ logging.basicConfig(format="%(levelname)s [%(name)s] %(message)s")  # show the l
 logger = logging.getLogger("app.chat")
 
 app = FastAPI(title="Conversational AI backend")
+app.include_router(feedback.router)
 
 
 class ChatRequest(BaseModel):
@@ -28,6 +29,9 @@ class ChatResponse(BaseModel):
     session_id: str
     reply: str
     intent: str | None = None
+    # Id of the assistant message created for this reply (the id to rate). Typed nullable because
+    # new fields must be nullable or optional (Principle I), but always an integer today.
+    message_id: int | None
 
 
 class HistoryMessage(BaseModel):
@@ -93,8 +97,11 @@ def _reply_for(session_id: str, message: str) -> dict:
     }
 
 
-def _persist(db: DbSession, session_id: str, message: str, result: dict) -> None:
-    """Store the session (if new) plus the user and assistant messages in one transaction."""
+def _persist(db: DbSession, session_id: str, message: str, result: dict) -> int:
+    """Store the session (if new) plus the user and assistant messages in one transaction.
+
+    Returns the id of the assistant message.
+    """
     for attempt in (1, 2):
         try:
             if db.get(models.Session, session_id) is None:
@@ -103,18 +110,19 @@ def _persist(db: DbSession, session_id: str, message: str, result: dict) -> None
                 # by FK; flush the session row first (still the same transaction).
                 db.flush()
             db.add(models.Message(session_id=session_id, role="user", content=message))
-            db.add(
-                models.Message(
-                    session_id=session_id,
-                    role="assistant",
-                    content=result["reply"],
-                    intent=result["intent"],
-                    latency_ms=result["latency_ms"],
-                    source=result["source"],
-                )
+            assistant = models.Message(
+                session_id=session_id,
+                role="assistant",
+                content=result["reply"],
+                intent=result["intent"],
+                latency_ms=result["latency_ms"],
+                source=result["source"],
             )
+            db.add(assistant)
+            db.flush()  # assigns the id; read it before commit, which expires the object
+            assistant_id = assistant.id
             db.commit()
-            return
+            return assistant_id
         except IntegrityError:
             # Lost a race creating the same new session concurrently; retry once.
             db.rollback()
@@ -132,8 +140,13 @@ def chat(req: ChatRequest, db: DbSession = Depends(get_db)):
     # The agent is called before touching the DB so no connection/transaction is held open during
     # the HTTP call; both messages are still written and committed together afterwards.
     result = _reply_for(req.session_id, req.message)
-    _persist(db, req.session_id, req.message, result)
-    return ChatResponse(session_id=req.session_id, reply=result["reply"], intent=result["intent"])
+    message_id = _persist(db, req.session_id, req.message, result)
+    return ChatResponse(
+        session_id=req.session_id,
+        reply=result["reply"],
+        intent=result["intent"],
+        message_id=message_id,
+    )
 
 
 @app.get("/api/chat/{session_id}/history", response_model=HistoryResponse)

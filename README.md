@@ -15,8 +15,25 @@ Chat app (ChatGPT-like) → FastAPI backend → AWS Bedrock AgentCore agent that
 // request
 { "session_id": "string", "message": "string" }
 // response
-{ "session_id": "string", "reply": "string", "intent": "string | null" }
+{ "session_id": "string", "reply": "string", "intent": "string | null", "message_id": "integer | null" }
 ```
+`message_id` is the id of the assistant message created for this reply, and it is the id to rate with the feedback
+endpoint below. It is always an integer today. Clients that don't use it can ignore it.
+
+`POST /api/messages/{message_id}/feedback`: rate one assistant message. Submitting again for the same message replaces
+the earlier feedback.
+```json
+// request: rating is required; reason (only with "down") and comment (max 1000 chars) are optional
+{ "rating": "up | down", "reason": "incorrect | unclear | wanted_a_person | other", "comment": "string" }
+// response 200 (created or replaced)
+{ "message_id": 42, "rating": "down", "reason": "string | null", "comment": "string | null",
+  "trace_id": null, "created_at": "ISO-8601", "updated_at": "ISO-8601" }
+```
+`trace_id` is always `null` until agent tracing exists, and the reason list is provisional (pending approval).
+Invalid input returns 400 `{"detail": "<message>"}` and stores nothing: a `message_id` that isn't a positive whole
+number, a body that isn't a JSON object, a bad `rating`, `reason` or `comment`, `reason` with `"up"`, or a user
+message (only assistant messages can be rated). An unknown message returns 404 `{"detail": "message not found"}`.
+See `specs/002-answer-feedback/contracts/feedback-api.md` for the exact messages.
 
 `GET /api/chat/{session_id}/history`: every message in the session, oldest first. An unknown session returns `"messages": []`.
 ```json

@@ -41,7 +41,7 @@ replaces the earlier feedback.
 | Part | Rules |
 |------|-------|
 | path `message_id` | A positive whole number of at most 18 digits: `^[1-9][0-9]{0,17}$`. |
-| body | A JSON object (`Content-Type: application/json`). |
+| body | A JSON object. Clients should send `Content-Type: application/json`, but the header is not required: like the other endpoints, the body is read as JSON whatever the header says. |
 
 ```json
 { "rating": "down", "reason": "unclear", "comment": "I didn't understand the second step." }
@@ -51,7 +51,7 @@ replaces the earlier feedback.
 |-------|----------|-------|
 | `rating` | yes | Exactly `"up"` or `"down"`. |
 | `reason` | no | Only with `"down"`. When present, one of `incorrect`, `unclear`, `wanted_a_person`, `other`. Absent or `null` means no reason. The list is provisional (FR-004). |
-| `comment` | no | A string of at most 1000 characters, with either rating. Absent, `null`, empty or whitespace-only means no comment. Stored exactly as submitted otherwise. |
+| `comment` | no | A string of at most 1000 characters, with either rating, and without a null character (`\u0000`) or an unpaired surrogate (for example `\ud800`), which the database can't store. Absent, `null`, empty or whitespace-only means no comment. Stored exactly as submitted otherwise. |
 
 Any other key in the body, including `trace_id`, is ignored.
 
@@ -87,11 +87,12 @@ these messages. When several apply, the first in this order is returned.
 | 4 | `reason` is not a string, or not on the list | `reason must be one of: incorrect, unclear, wanted_a_person, other` |
 | 5 | `reason` given with `rating` `up` | `reason is only allowed with a "down" rating` |
 | 6 | `comment` is not a string | `comment must be a string` |
-| 7 | `comment` is longer than 1000 characters | `comment must be at most 1000 characters` |
-| 8 | The message exists but is a user message | `feedback is only allowed on assistant messages` |
+| 7 | `comment` contains a null character or an unpaired surrogate | `comment must not contain null or unpaired surrogate characters` |
+| 8 | `comment` is longer than 1000 characters | `comment must be at most 1000 characters` |
+| 9 | The message exists but is a user message | `feedback is only allowed on assistant messages` |
 
-Cases 1 to 7 are checked before the database is read. Case 8 is checked after the message is
-found.
+Cases 1 to 8 are checked before the database is read. Case 9 is checked after the message is
+found. A body nested so deeply that it can't be parsed is case 2 (not a JSON object).
 
 **404**: no message has this id. Nothing is stored.
 
@@ -120,7 +121,7 @@ The backend pytest suite MUST cover each of these. Each refusal test also checks
 2. **Rate up** and **rate down** return 200 with the response above, and store one row.
 3. **Reply source**: feedback on a message whose `source` is `mock` is accepted, and so is
    feedback on a message whose `source` is `agent`.
-4. **User message** returns 400 with the case 8 message.
+4. **User message** returns 400 with the case 9 message.
 5. **Unknown id** returns 404. A non-numeric id (`abc`), `1.5`, `-1`, `0`, `007` and a 19-digit
    id return 400 with the case 1 message.
 6. **Bad rating**: missing, `null`, empty, `"Up"`, `"thumbs_up"`, `true` and `5` each return 400.
@@ -139,3 +140,10 @@ The backend pytest suite MUST cover each of these. Each refusal test also checks
 13. **trace_id**: the response has `null`, and a `trace_id` sent in the body is ignored.
 14. **No side effects on existing behaviour**: the full existing suite passes. The only edits
     to existing tests are the two assertions that compare the whole chat response body.
+15. **Input the database can't store**: a comment with a null character or an unpaired
+    surrogate returns 400 with the case 7 message, and a valid surrogate pair (an emoji) is
+    accepted. A deeply nested body returns 400 with the case 2 message. A body without a
+    `Content-Type` header is accepted. **The null-character and surrogate cases can only be
+    proven on Postgres**: SQLite stores a null character without complaint, so the pytest
+    cases guard the validation rule, and the Docker check in quickstart step 3 proves there is
+    no 500 on Postgres.
