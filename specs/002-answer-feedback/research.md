@@ -54,7 +54,9 @@ file records the design decisions and why each was made.
 - **Decision**: the handler reads the request body itself and validates it with one small
   function, `parse_feedback_body()`. Every invalid-input case raises
   `HTTPException(400, detail=...)`. The `message_id` path value is taken as a string and
-  checked by the handler too. The response uses a normal Pydantic response model.
+  checked by the handler too. The response uses a normal Pydantic response model. The raw
+  body is read by a small async dependency (`await request.body()`), so the handler itself
+  stays a plain sync `def` like the others and runs in the thread pool.
 - **Rationale**: the constitution requires `{"detail": ...}` with status 400. If the request
   fields were declared as Pydantic models, a missing field, a wrong type or a body that
   isn't JSON would return 422 before the handler runs.
