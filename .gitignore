@@ -9,3 +9,6 @@ __pycache__/
 *.tsbuildinfo
 *.log
 coverage/
+
+# /pdlc run state (local progress per branch)
+.pdlc/runs/

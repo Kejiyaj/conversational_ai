@@ -128,4 +128,25 @@ Project rules live in `.specify/memory/constitution.md`, and each feature's arti
 4. `/speckit-tasks`: breaks the plan into ordered tasks. Run `/speckit-analyze` (optional) to check consistency.
 5. `/speckit-implement`: builds the feature from the tasks.
 
-Review the generated spec and plan before moving to the next step. If an API contract changes, update the contract section above in the same PR.
+Review the generated spec and plan before moving to the next step.
+
+### End to end with `/pdlc`
+
+`/pdlc` runs the whole flow from a requirement to a pull request. It reads the requirement from Confluence or Jira, then
+writes the spec, gets the Figma design (or proposes one), plans, creates Jira tickets, builds with tests first, verifies
+and opens the PR. It stops for your approval at the spec, design, plan, Jira and PR steps.
+
+```text
+/pdlc https://<org>.atlassian.net/wiki/spaces/…/pages/…    # from a Confluence page
+/pdlc CONVAI-123                                            # from an existing Jira ticket
+/pdlc CONVAI-123 https://www.figma.com/design/…             # with a Figma link
+/pdlc resume                                                # continue the run on this branch
+```
+
+- Steps: `.pdlc/PLAYBOOK.md`. Settings (Jira project, issue types, statuses, custom fields, Figma, branches, verify
+  commands, gates): `.pdlc/config.yaml`. No secrets: Confluence, Jira and Figma sign in through their MCP servers.
+- Works in Claude Code (`/pdlc`), Cursor (`/pdlc`, MCP servers in `.cursor/mcp.json`) and GitHub Copilot in VS Code
+  (`/pdlc` prompt, MCP servers in `.vscode/mcp.json`).
+- In Claude Code, a hook (`.pdlc/hooks/guard.py`) blocks pushes to `main` and blocks opening a PR before verify passes.
+  Test it with `python3 -m unittest discover -s .pdlc/hooks`.
+- Opening the PR uses the GitHub CLI: `brew install gh && gh auth login`. If an API contract changes, update the contract section above in the same PR.
