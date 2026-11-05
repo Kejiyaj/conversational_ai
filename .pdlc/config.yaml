@@ -1,0 +1,76 @@
+# PDLC flow settings. /pdlc reads this file at the start of every step.
+#
+# No secrets go here. Confluence, Jira and Figma sign in through their MCP servers (OAuth in the
+# browser), so this file is safe to commit. Blank values are fine: the flow asks you, or looks
+# the value up, when it needs one.
+
+version: 1
+
+atlassian:
+  site: ""                      # e.g. yourcompany.atlassian.net
+  cloud_id: ""                  # optional; looked up on the first run when blank
+
+confluence:
+  default_space: ""             # e.g. PFG
+  follow_child_pages: true      # also read pages under the given page
+  follow_links_depth: 1         # levels of linked Confluence pages to read (0 = none)
+
+jira:
+  default_project_key: ""       # used only when you give no ticket, e.g. CONVAI
+  project_keys: []              # keys to recognise in chat, e.g. [CONVAI, PFG]
+  issue_types:                  # names as they appear in your Jira
+    epic: Epic
+    story: Story
+    task: Task
+    subtask: Sub-task
+  breakdown:                    # what is created under the parent ticket
+    under_epic: story           # one Story per user story in the spec
+    under_story: subtask        # one Sub-task per phase in tasks.md
+  statuses:                     # transition names in your Jira workflow
+    in_progress: In Progress
+    in_review: In Review
+    done: Done
+  labels: [pdlc]
+  components: []
+  fields:                       # custom field ids, e.g. customfield_10016; blank = not used
+    story_points: ""
+    acceptance_criteria: ""
+    sprint: ""
+  assignee: ""                  # "me", an account email, or blank for unassigned
+
+figma:
+  default_file_url: ""
+  required: false               # true = stop without a Figma link; false = propose a design
+  design_tokens: frontend/src/theme/principal.css
+  components_dir: frontend/src/components/ui
+
+git:
+  base_branch: main
+  protected_branches: [main, master]   # the guard hook blocks pushing to these
+  branch_pattern: "{ticket}-{slug}"    # without a ticket: "{number}-{slug}", e.g. 006-input-disclaimer
+  use_worktrees: false
+
+github:
+  repo: siddeshthoratrsystem/conversational_ai
+  reviewers: []                 # GitHub usernames
+  labels: []
+  draft_pr: true
+
+verify:                         # every command must pass before a PR is opened
+  - name: backend tests
+    run: cd backend && .venv/bin/pytest -q
+  - name: agent tests
+    run: cd agent && .venv/bin/pytest -q
+  - name: agent lint
+    run: cd agent && .venv/bin/ruff check . && .venv/bin/ruff format --check .
+  - name: frontend tests
+    run: cd frontend && npm test
+  - name: frontend type check and build
+    run: cd frontend && npm run build
+
+gates:                          # true = stop and wait for your approval at this step
+  spec: true
+  design: true
+  plan: true
+  jira_create: true
+  push_and_pr: true
