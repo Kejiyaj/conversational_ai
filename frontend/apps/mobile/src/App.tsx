@@ -14,11 +14,11 @@ export default function App() {
   const [pressed, setPressed] = useState(false);
 
   return (
-    <View className="flex-1 items-center justify-center gap-4 bg-background p-6">
-      <Text className="text-2xl font-semibold text-foreground">PFG Wealth Assistant</Text>
-      <Text className="text-base text-foreground">{body}</Text>
-      <Text className="text-xs text-muted-foreground">{disclaimer}</Text>
-      <Button size="lg" onPress={() => setPressed(true)}>
+    <View className="flex-1 items-center justify-center gap-4 bg-page p-6">
+      <Text className="text-2xl font-bold text-navy">PFG Wealth Assistant</Text>
+      <Text className="text-base text-ink">{body}</Text>
+      <Text className="text-xs text-muted">{disclaimer}</Text>
+      <Button variant="primary" size="lg" onPress={() => setPressed(true)}>
         Try the shared Button
       </Button>
       {pressed && <Text className="text-sm text-primary">Button pressed</Text>}

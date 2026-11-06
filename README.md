@@ -106,11 +106,11 @@ import apps.
 
 | Folder | What lives there |
 |--------|------------------|
-| `apps/web/` | The website (Vite): screens, browser services, tests |
+| `apps/web/` | The website (Vite): chat screens (`src/chat/`), demo sign-in (`src/auth/`), browser services, tests |
 | `apps/mobile/` | The mobile app (Expo, React Native): starter screen for now |
 | `packages/ui/` | Shared components. `src/button/` has web and native files; `src/web/` holds web-only components |
-| `packages/core/` | API client and types, and text parsing. No UI or platform code |
-| `packages/tokens/` | Brand colours in `tokens.json`, and the CSS generated from them |
+| `packages/core/` | API client and types, text parsing and server time parsing. No UI or platform code |
+| `packages/tokens/` | Figma design tokens in `tokens.json`, and the CSS generated from them |
 
 Commands, from `frontend/`:
 
@@ -128,17 +128,35 @@ no page origin. The website keeps the relative `/api` path.
 
 ## Frontend: UI kit and theme
 
-- UI components are [shadcn](https://ui.shadcn.com) (Radix variant) with
-  [AI Elements](https://ui.shadcn.com/docs/ai-elements) for the chat. Generated components live in
-  `frontend/packages/ui/src/web/` and are ours to edit.
-- Add a component: `cd frontend/packages/ui && npx shadcn@latest add <name>`, then change any `@/web/<name>` import in
-  the new file to `@convai/ui/<name>`. Import it anywhere as `@convai/ui/<name>`.
-- Web-only components fail at type check and bundling if imported in the mobile app. To port one, move it to
-  `packages/ui/src/<name>/` with shared types and web and native files, and add it to `exports` in
-  `packages/ui/package.json`. See `specs/007-shared-ui-library/contracts/`.
-- Brand values (Principal theme) live only in `frontend/packages/tokens/tokens.json`. Components use
-  shadcn variables (`bg-primary`, `text-foreground` and so on), never hard-coded colors; a test enforces this.
-  See `specs/003-shadcn-ai-elements/contracts/theme-tokens.md`.
+The UI follows the Figma file *WPI Day 1.5 (P&A and P&E)*, by way of the Alfred mock UI built from it.
+The chat is the full-page Alfred layout (Figma frame A9): header, left icon rail, a History panel for past chats,
+and the "Good morning" welcome (frame S1) on an empty chat.
+
+- **Design tokens** (colors, type scale, radii, shadows, gradients) live only in
+  `frontend/packages/tokens/tokens.json`. `npm run tokens` turns them into a Tailwind v4 theme for the website
+  (Tailwind's default colors removed, so classes like `bg-primary`, `text-navy` and `shadow-card` always match the
+  design) and Uniwind colors for the mobile app. No hex colors anywhere else; a test enforces this. Light only.
+- **Font:** the design uses FS Elliot Pro (licensed). The website falls back to Source Sans 3 (`@fontsource`).
+- **Components** live in `frontend/packages/ui/` and are plain React + Tailwind, with unstyled
+  [Radix UI](https://www.radix-ui.com) primitives where behavior matters (tabs, toggle groups). Import them as
+  `@convai/ui/<name>`, for example `@convai/ui/card`:
+
+  | Component | Use |
+  |---|---|
+  | `button` | `primary`, `secondary`, `link`, `ai` (gradient), `ghost`; sizes `sm`, `md`, `lg`, `icon`. Web and native |
+  | `ai-button` | Alfred's full-width gradient call to action (welcome cards) |
+  | `chip`, `choice-chips` | Alfred quick replies; pick-one chip group (a radio group for screen readers) |
+  | `text-field`, `textarea` | Labelled inputs with error state |
+  | `card`, `status-tag`, `progress-bar`, `key-value-list`, `tabs` | Dashboard building blocks for the next screens |
+  | `logo`, `soundwave` | Brand assets from Figma (`src/assets/brand/`) and the composer's voice glyph |
+  | `cn` | Joins class names; later Tailwind classes win |
+
+- Add a component as `packages/ui/src/web/<name>.tsx`, using only token classes. Web-only components fail at type
+  check and bundling if imported in the mobile app. To port one, move it to `packages/ui/src/<name>/` with shared
+  types and web and native files, and add it to `exports` in `packages/ui/package.json`. See
+  `specs/007-shared-ui-library/contracts/`. On native, `ai` is a solid blue until gradients are supported.
+- **Sign-in is a demo:** any username and password are accepted, only the username is kept (in `localStorage`),
+  and nothing is checked or sent to the backend. Replace `apps/web/src/auth/user.ts` with real authentication later.
 - Answer feedback: thumbs up/down, an optional reason and a comment under each reply, sent to
   `POST /api/messages/{message_id}/feedback` (spec 002). Ratings are shown for the current visit only;
   history does not return them yet. See `specs/004-answer-feedback-ui/`.
