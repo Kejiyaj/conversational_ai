@@ -31,12 +31,12 @@ describe("native Button", () => {
 
   it("applies the classes for its variant and size", async () => {
     await render(
-      <Button variant="outline" size="lg">
+      <Button variant="primary" size="sm">
         Send
       </Button>,
     );
-    expect(screen.getByRole("button").props.className).toContain("border-border");
-    expect(screen.getByRole("button").props.className).toContain("h-9");
+    expect(screen.getByRole("button").props.className).toContain("bg-primary");
+    expect(screen.getByRole("button").props.className).toContain("h-8");
   });
 
   it("does not call onPress when disabled", async () => {

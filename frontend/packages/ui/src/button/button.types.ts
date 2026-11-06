@@ -1,9 +1,10 @@
 import type { ReactNode } from "react"
 
 // The options every Button implementation must support (spec 007 contracts/button-api.md).
-export type ButtonVariant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link"
+// Variants and sizes follow the Figma "button" component.
+export type ButtonVariant = "primary" | "secondary" | "link" | "ai" | "ghost"
 
-export type ButtonSize = "default" | "xs" | "sm" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"
+export type ButtonSize = "sm" | "md" | "lg" | "icon"
 
 export type ButtonOptions = {
   variant?: ButtonVariant
