@@ -4,3 +4,4 @@ httpx
 psycopg[binary]
 sqlalchemy
 alembic
+pyjwt[crypto]>=2.10,<3

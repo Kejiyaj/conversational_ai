@@ -13,8 +13,25 @@ services:
     environment:
       DATABASE_URL: postgresql://app:app@db:5432/convai
       AGENT_URL: ${AGENT_URL:-}
+      # Sign-in check (spec 008). The issuer is the name in the token (as seen from the browser);
+      # the keys are fetched over the compose network.
+      OIDC_ISSUER: http://localhost:8090/default
+      OIDC_AUDIENCE: convai-api
+      OIDC_JWKS_URL: http://oidc:8090/default/jwks
     ports: ["8000:8000"]
-    depends_on: [db]
+    depends_on: [db, oidc]
+
+  # Dev-only stand-in identity provider (backend/devtools/stand_in_idp.py). It replaces
+  # mock-oauth2-server, which Docker could not pull from ghcr.io. Any username works.
+  oidc:
+    build: ./backend
+    command: python -m devtools.stand_in_idp
+    environment:
+      STAND_IN_PORT: "8090"
+      STAND_IN_ISSUER: http://localhost:8090/default
+      STAND_IN_AUDIENCE: convai-api
+    volumes: ["./backend/devtools:/app/devtools:ro"]
+    ports: ["8090:8090"]
 
 volumes:
   pgdata:

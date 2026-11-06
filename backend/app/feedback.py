@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from app import models
+from app.auth import current_user
 from app.db import get_db
 
 # The provisional reason list (FR-004, pending approval). This is the only place it is defined.
@@ -18,6 +20,7 @@ RATINGS = ("up", "down")
 MESSAGE_ID_PATTERN = re.compile(r"[1-9][0-9]{0,17}")
 
 router = APIRouter()
+logger = logging.getLogger("app.feedback")
 
 
 class FeedbackResponse(BaseModel):
@@ -128,12 +131,22 @@ def save_feedback(db: DbSession, message_id: int, data: dict) -> models.Feedback
 
 
 @router.post("/api/messages/{message_id}/feedback", response_model=FeedbackResponse)
-def submit_feedback(message_id: str, raw: bytes = Depends(raw_body), db: DbSession = Depends(get_db)):
+def submit_feedback(
+    message_id: str,
+    raw: bytes = Depends(raw_body),
+    user_id: str = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
     id_ = parse_message_id(message_id)
     data = parse_feedback_body(raw)
 
     message = db.get(models.Message, id_)
-    if message is None:
+    session = db.get(models.Session, message.session_id) if message is not None else None
+    if session is None or session.user_id != user_id:
+        # Missing, someone else's or nobody's: the same 404, before anything about the message
+        # (such as its role) is revealed (spec 008 FR-016, FR-017).
+        case = "missing" if message is None else "nobody's" if session.user_id is None else "someone else's"
+        logger.warning("Feedback refused (404): message is %s (message_id=%s)", case, id_)
         raise HTTPException(status_code=404, detail="message not found")
     if message.role != "assistant":
         raise bad_request("feedback is only allowed on assistant messages")

@@ -1,2 +1,3 @@
+--only-binary cryptography
 -r requirements.txt
 pytest

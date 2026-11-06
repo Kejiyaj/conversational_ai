@@ -22,10 +22,10 @@ def user_message_id(client, session_id="s1"):
     return next(m["id"] for m in messages if m["role"] == "user")
 
 
-def add_turn(engine, session_id="s1"):
+def add_turn(engine, session_id="s1", user_id="alice"):
     """Insert a session with one user and one assistant message directly. Returns (user_id, assistant_id)."""
     with Session(engine) as db:
-        db.add(models.Session(id=session_id))
+        db.add(models.Session(id=session_id, user_id=user_id))
         db.flush()
         user = models.Message(session_id=session_id, role="user", content="hi")
         assistant = models.Message(

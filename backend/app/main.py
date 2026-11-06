@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Literal
 
@@ -10,13 +11,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from app import feedback, models
+from app import auth
+from app.auth import current_user
 from app.agent import AgentError, call_agent
 from app.db import get_db
 
 logging.basicConfig(format="%(levelname)s [%(name)s] %(message)s")  # show the level on app logs
 logger = logging.getLogger("app.chat")
 
-app = FastAPI(title="Conversational AI backend")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    auth.load_settings()  # refuse to start, naming the setting, if the sign-in check isn't configured
+    yield
+
+
+app = FastAPI(title="Conversational AI backend", lifespan=lifespan)
 app.include_router(feedback.router)
 
 
@@ -97,15 +106,40 @@ def _reply_for(session_id: str, message: str) -> dict:
     }
 
 
-def _persist(db: DbSession, session_id: str, message: str, result: dict) -> int:
+SESSION_NOT_FOUND = "session not found"
+
+
+def _refuse_session(db: DbSession, session_id: str, user_id: str) -> HTTPException:
+    """The one 404 for a chat that is missing, someone else's or nobody's (FR-017).
+
+    The response is identical in every case; only the log says which one it was.
+    """
+    row = db.get(models.Session, session_id)
+    case = "missing" if row is None else "nobody's" if row.user_id is None else "someone else's"
+    logger.warning("Session refused (404): %s is %s (session_id=%s)", case, case, session_id)
+    return HTTPException(status_code=404, detail=SESSION_NOT_FOUND)
+
+
+def _check_owner(db: DbSession, session_id: str, user_id: str) -> bool:
+    """True if the session exists and is the caller's. Raises 404 if it exists but is not."""
+    row = db.get(models.Session, session_id)
+    if row is None:
+        return False
+    if row.user_id != user_id:
+        raise _refuse_session(db, session_id, user_id)
+    return True
+
+
+def _persist(db: DbSession, session_id: str, user_id: str, message: str, result: dict) -> int:
     """Store the session (if new) plus the user and assistant messages in one transaction.
 
-    Returns the id of the assistant message.
+    A new session is owned by the caller. If another user's session turned up meanwhile, the
+    answer is the same 404 and nothing is stored. Returns the id of the assistant message.
     """
     for attempt in (1, 2):
         try:
-            if db.get(models.Session, session_id) is None:
-                db.add(models.Session(id=session_id))
+            if not _check_owner(db, session_id, user_id):
+                db.add(models.Session(id=session_id, user_id=user_id))
                 # No relationship() links the models, so the unit of work won't order the inserts
                 # by FK; flush the session row first (still the same transaction).
                 db.flush()
@@ -123,24 +157,34 @@ def _persist(db: DbSession, session_id: str, message: str, result: dict) -> int:
             assistant_id = assistant.id
             db.commit()
             return assistant_id
+        except HTTPException:
+            db.rollback()
+            raise
         except IntegrityError:
-            # Lost a race creating the same new session concurrently; retry once.
+            # Lost a race creating the same new session concurrently; retry once (the retry
+            # re-checks the owner, so a different user's session id is a 404).
             db.rollback()
             if attempt == 2:
                 raise
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, db: DbSession = Depends(get_db)):
+def chat(
+    req: ChatRequest, user_id: str = Depends(current_user), db: DbSession = Depends(get_db)
+):
     if not req.session_id.strip():
         raise HTTPException(status_code=400, detail="session_id must not be empty")
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message must not be empty")
 
-    # The agent is called before touching the DB so no connection/transaction is held open during
-    # the HTTP call; both messages are still written and committed together afterwards.
+    # Someone else's (or nobody's) session is a 404 before the agent is called or anything stored.
+    _check_owner(db, req.session_id, user_id)
+    db.rollback()  # end the read transaction so no connection is held during the agent call
+
+    # The agent is called before writing so no transaction is held open during the HTTP call;
+    # both messages are still written and committed together afterwards.
     result = _reply_for(req.session_id, req.message)
-    message_id = _persist(db, req.session_id, req.message, result)
+    message_id = _persist(db, req.session_id, user_id, req.message, result)
     return ChatResponse(
         session_id=req.session_id,
         reply=result["reply"],
@@ -150,7 +194,11 @@ def chat(req: ChatRequest, db: DbSession = Depends(get_db)):
 
 
 @app.get("/api/chat/{session_id}/history", response_model=HistoryResponse)
-def history(session_id: str, db: DbSession = Depends(get_db)):
+def history(
+    session_id: str, user_id: str = Depends(current_user), db: DbSession = Depends(get_db)
+):
+    if not _check_owner(db, session_id, user_id):
+        raise _refuse_session(db, session_id, user_id)
     rows = db.scalars(
         select(models.Message)
         .where(models.Message.session_id == session_id)
@@ -166,7 +214,11 @@ def _title_from(message: str) -> str:
 
 
 @app.get("/api/sessions", response_model=SessionsResponse)
-def list_sessions(ids: list[str] = Query(default=[]), db: DbSession = Depends(get_db)):
+def list_sessions(
+    ids: list[str] = Query(default=[]),
+    user_id: str = Depends(current_user),
+    db: DbSession = Depends(get_db),
+):
     """Summaries of the requested sessions (the browser's own list), newest activity first.
 
     Read-only: unknown ids are skipped and nothing is created.
@@ -190,7 +242,7 @@ def list_sessions(ids: list[str] = Query(default=[]), db: DbSession = Depends(ge
     rows = db.execute(
         select(models.Session.id, models.Session.created_at, last_active, first_user_message.label("title"))
         .join(msg, msg.session_id == models.Session.id)
-        .where(models.Session.id.in_(wanted))
+        .where(models.Session.id.in_(wanted), models.Session.user_id == user_id)
         .group_by(models.Session.id, models.Session.created_at)
         .order_by(last_active.desc(), models.Session.id)
     ).all()

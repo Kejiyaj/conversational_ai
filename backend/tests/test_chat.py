@@ -107,11 +107,11 @@ def test_history_returns_messages_in_order(client):
     assert ids == sorted(ids)
 
 
-def test_history_for_unknown_session_is_empty_and_creates_nothing(client, engine):
+def test_history_for_unknown_session_is_404_and_creates_nothing(client, engine):
     r = client.get("/api/chat/does-not-exist/history")
 
-    assert r.status_code == 200
-    assert r.json() == {"session_id": "does-not-exist", "messages": []}
+    assert r.status_code == 404  # spec 008 FR-014: same answer as another user's chat
+    assert r.json() == {"detail": "session not found"}
     with Session(engine) as db:
         assert db.scalars(select(models.Session)).all() == []
 
