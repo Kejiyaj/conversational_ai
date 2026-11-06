@@ -1,0 +1,16 @@
+{
+  "name": "@convai/tokens",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./principal.css": "./generated/principal.css",
+    "./uniwind.css": "./generated/uniwind.css"
+  },
+  "scripts": {
+    "generate": "node generate.mjs",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0"
+  }
+}

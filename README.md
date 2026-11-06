@@ -4,7 +4,7 @@ Chat app (ChatGPT-like) → FastAPI backend → AWS Bedrock AgentCore agent that
 
 | Folder      | What                              | Owner  |
 |-------------|-----------------------------------|--------|
-| `frontend/` | React (Vite + TS) chat UI         | Vinod  |
+| `frontend/` | Website and mobile app, with shared packages | Vinod  |
 | `backend/`  | FastAPI + Postgres                | Rajesh |
 | `agent/`    | AgentCore agent (needs R Systems AWS + AgentCore access) | TBD |
 
@@ -63,7 +63,7 @@ The backend calls the agent with `{ "prompt": "<message>", "session_id": "..." }
 docker compose up --build        # backend on http://localhost:8000
 
 # Frontend
-cd frontend && npm install && npm run dev   # http://localhost:5173 (proxies /api to :8000)
+cd frontend && npm install && npm run web   # http://localhost:5173 (proxies /api to :8000)
 
 # Agent (once AWS access is set up)
 cd agent && uv run agent.py      # local AgentCore runtime on http://localhost:8080
@@ -98,19 +98,45 @@ PYTHONPATH=src python evals/run_eval.py       # live golden-case eval (needs Oll
 
 Config: `WEALTH_AGENT_PROVIDER` (only `ollama`), `OLLAMA_HOST`, `OLLAMA_MODEL`.
 
-## Frontend: test
+## Frontend: structure
 
-```bash
-cd frontend && npm install && npm test   # vitest + jsdom, fetch is mocked (no backend needed)
-```
+`frontend/` is one npm workspace, so run `npm install` once in `frontend/`. If you have an older checkout, delete
+`frontend/node_modules` first. Apps run things and packages share things: apps can import packages, and packages never
+import apps.
+
+| Folder | What lives there |
+|--------|------------------|
+| `apps/web/` | The website (Vite): screens, browser services, tests |
+| `apps/mobile/` | The mobile app (Expo, React Native): starter screen for now |
+| `packages/ui/` | Shared components. `src/button/` has web and native files; `src/web/` holds web-only components |
+| `packages/core/` | API client and types, and text parsing. No UI or platform code |
+| `packages/tokens/` | Brand colours in `tokens.json`, and the CSS generated from them |
+
+Commands, from `frontend/`:
+
+| Command | What it does |
+|---------|--------------|
+| `npm run web` | Starts the website |
+| `npm run mobile` | Starts the Expo dev server (needs a simulator, or Expo Go on a device) |
+| `npm test` | Runs all tests. Fetch is mocked, and no backend or simulator is needed |
+| `npm run build` | Type checks and builds the website, and type checks the mobile app |
+| `npm run bundle:mobile` | Checks that the mobile app bundles for iOS and Android |
+| `npm run tokens` | Regenerates the theme CSS after a change to `tokens.json` |
+
+The mobile app must call `configureApi({ baseUrl })` from `@convai/core` before using the API, because a native app has
+no page origin. The website keeps the relative `/api` path.
 
 ## Frontend: UI kit and theme
 
 - UI components are [shadcn](https://ui.shadcn.com) (Radix variant) with
   [AI Elements](https://ui.shadcn.com/docs/ai-elements) for the chat. Generated components live in
-  `frontend/src/components/ui/` and are ours to edit.
-- Add a component: `cd frontend && npx shadcn@latest add <name>`.
-- Brand values (Principal theme) live only in `frontend/src/theme/principal.css`. Components use
+  `frontend/packages/ui/src/web/` and are ours to edit.
+- Add a component: `cd frontend/packages/ui && npx shadcn@latest add <name>`, then change any `@/web/<name>` import in
+  the new file to `@convai/ui/<name>`. Import it anywhere as `@convai/ui/<name>`.
+- Web-only components fail at type check and bundling if imported in the mobile app. To port one, move it to
+  `packages/ui/src/<name>/` with shared types and web and native files, and add it to `exports` in
+  `packages/ui/package.json`. See `specs/007-shared-ui-library/contracts/`.
+- Brand values (Principal theme) live only in `frontend/packages/tokens/tokens.json`. Components use
   shadcn variables (`bg-primary`, `text-foreground` and so on), never hard-coded colors; a test enforces this.
   See `specs/003-shadcn-ai-elements/contracts/theme-tokens.md`.
 - Answer feedback: thumbs up/down, an optional reason and a comment under each reply, sent to

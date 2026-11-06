@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "PFG Wealth Assistant",
+    "slug": "convai-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic"
+  }
+}

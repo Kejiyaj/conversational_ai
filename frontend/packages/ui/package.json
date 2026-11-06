@@ -1,0 +1,31 @@
+{
+  "name": "@convai/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./button": {
+      "react-native": "./src/button/button.native.tsx",
+      "default": "./src/button/button.web.tsx"
+    },
+    "./*": {
+      "react-native": null,
+      "default": "./src/web/*.tsx"
+    }
+  },
+  "dependencies": {
+    "@shadcn/react": "^0.3.1",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.5.2",
+    "lucide-react": "^1.68.0",
+    "radix-ui": "^1.8.1"
+  },
+  "peerDependencies": {
+    "react": "19.3.0",
+    "react-native": "0.88.1"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
+  }
+}

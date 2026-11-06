@@ -41,8 +41,8 @@ jira:
 figma:
   default_file_url: ""
   required: false               # true = stop without a Figma link; false = propose a design
-  design_tokens: frontend/src/theme/principal.css
-  components_dir: frontend/src/components/ui
+  design_tokens: frontend/packages/tokens/tokens.json
+  components_dir: frontend/packages/ui/src
 
 git:
   base_branch: main
