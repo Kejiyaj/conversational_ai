@@ -10,6 +10,18 @@ Chat app (ChatGPT-like) → FastAPI backend → AWS Bedrock AgentCore agent that
 
 ## API contract (FE ↔ BE)
 
+**Sign-in (spec 008).** Every endpoint except `GET /api/health` needs `Authorization: Bearer <access token>` from the
+identity provider. The user is the token's `sub`; nothing else can set it. Request and response bodies are unchanged.
+Added responses, all `{"detail": "<message>"}`:
+
+- `401 "missing or invalid bearer token"` (with `WWW-Authenticate`) for a missing, malformed, unsigned, badly signed,
+  expired (more than 60 s ago), wrong-issuer, wrong-audience or no-`sub` token. It never says which check failed.
+- `404` for another user's chat or message, and for a chat created before sign-in existed, with the same response as
+  one that doesn't exist (`"session not found"` for chat and history, `"message not found"` for feedback).
+- `503 "sign-in service unavailable, try again later"` when the identity provider's keys can't be fetched at all.
+
+See `specs/008-oidc-auth/contracts/` for the details.
+
 `POST /api/chat`
 ```json
 // request
@@ -35,7 +47,8 @@ number, a body that isn't a JSON object, a bad `rating`, `reason` or `comment`, 
 message (only assistant messages can be rated). An unknown message returns 404 `{"detail": "message not found"}`.
 See `specs/002-answer-feedback/contracts/feedback-api.md` for the exact messages.
 
-`GET /api/chat/{session_id}/history`: every message in the session, oldest first. An unknown session returns `"messages": []`.
+`GET /api/chat/{session_id}/history`: every message in the caller's session, oldest first. An unknown session, or one that
+belongs to someone else, returns 404 `{"detail": "session not found"}` (it used to return `"messages": []`).
 ```json
 { "session_id": "string",
   "messages": [ { "id": 1, "role": "user | assistant", "content": "string",
@@ -44,7 +57,7 @@ See `specs/002-answer-feedback/contracts/feedback-api.md` for the exact messages
 ```
 
 `GET /api/sessions?ids=<id>&ids=<id>…`: summaries of the given sessions for the sidebar, most recently active first.
-The frontend sends the session IDs this browser has used. Unknown IDs are skipped, and more than 200 IDs returns
+The frontend sends the session IDs this browser has used. Unknown IDs, and IDs of other users' sessions, are skipped, and more than 200 IDs returns
 400 `{"detail": "too many session ids (max 200)"}`.
 ```json
 { "sessions": [ { "session_id": "string", "title": "first user message (max 80 chars + …)",
@@ -59,8 +72,8 @@ The backend calls the agent with `{ "prompt": "<message>", "session_id": "..." }
 ## Run locally
 
 ```bash
-# Postgres + backend
-docker compose up --build        # backend on http://localhost:8000
+# Postgres + backend + stand-in identity provider
+docker compose up --build        # backend on http://localhost:8000, stand-in on http://localhost:8090
 
 # Frontend
 cd frontend && npm install && npm run web   # http://localhost:5173 (proxies /api to :8000)
@@ -68,6 +81,28 @@ cd frontend && npm install && npm run web   # http://localhost:5173 (proxies /ap
 # Agent (once AWS access is set up)
 cd agent && uv run agent.py      # local AgentCore runtime on http://localhost:8080
 ```
+
+## Backend: sign-in check and the local stand-in
+
+The backend needs three settings (see `.env.example`) and won't start without them: `OIDC_ISSUER` (the token's `iss`),
+`OIDC_AUDIENCE` (the `aud` it accepts) and `OIDC_JWKS_URL` (where the provider publishes its public keys). Pointing
+them at the client's Okta instead is a settings change, with no code change. `docker compose` sets them for the
+stand-in, `backend/devtools/stand_in_idp.py` (dev only, port 8090, any username, no password check). It replaces
+mock-oauth2-server, which Docker could not pull from ghcr.io, and has the same paths, issuer and audience.
+
+Get a token and call the API by hand:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8090/default/token \
+  -d grant_type=password -d username=alice -d password=x -d client_id=convai-web -d scope=openid \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
+curl -s -X POST http://localhost:8000/api/chat -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"session_id":"demo-1","message":"hi"}'
+```
+
+The web sign-in page does the same call (`VITE_OIDC_TOKEN_URL` overrides the address). Tests make their own keys and
+tokens and need no identity provider. On an Intel-Mac Python, `requirements-dev.txt` installs a prebuilt `cryptography`
+wheel, because newer versions only publish arm64 wheels for macOS.
 
 ## Backend: run and test
 

@@ -11,6 +11,9 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)  # client-supplied session_id
+    # The token's `sub` for whoever sent the first message; never changed. NULL = nobody owns it
+    # (every chat stored before spec 008), so the API treats it as not found for everyone.
+    user_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

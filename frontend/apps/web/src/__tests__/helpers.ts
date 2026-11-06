@@ -3,10 +3,13 @@ import { vi } from "vitest";
 
 import type { HistoryMessage, SessionSummary } from "@convai/core";
 
-/** Start signed in (the demo sign-in keeps the username in localStorage). */
-export function signInAs(username = "vinod.patil@example.com") {
-  localStorage.setItem("convai.user", JSON.stringify({ username }));
+/** Start signed in (sign-in keeps the username and access token in localStorage). */
+export function signInAs(username = "vinod.patil@example.com", token = "test-token") {
+  localStorage.setItem("convai.user", JSON.stringify({ username, token }));
 }
+
+/** The stand-in identity provider's token endpoint (spec 008). */
+export const TOKEN_URL = "http://localhost:8090/default/token";
 
 /** Alfred's message box. */
 export const messageBox = () => screen.getByRole("textbox", { name: "Message Alfred" }) as HTMLTextAreaElement;
@@ -28,7 +31,13 @@ export type Server = {
   failList: boolean;
   /** When set, POST /api/chat waits for this promise before answering. */
   holdChat: Promise<void> | null;
-  calls: { method: string; url: string; body?: unknown }[];
+  calls: { method: string; url: string; body?: unknown; auth?: string | null }[];
+  /** Spec 008: token requests received, as form fields. */
+  tokenRequests: Record<string, string>[];
+  /** Spec 008: when true, the token endpoint answers 500. */
+  failToken: boolean;
+  /** Spec 008: when true, every /api/* call answers 401. */
+  rejectToken: boolean;
   /** Spec 004: last feedback body stored per message id. */
   feedback: Map<number, unknown>;
   /** Spec 004: when true, the feedback endpoint answers 500. */
@@ -73,6 +82,9 @@ export function installServer(): Server {
     failList: false,
     holdChat: null,
     calls: [],
+    tokenRequests: [],
+    failToken: false,
+    rejectToken: false,
     feedback: new Map(),
     failFeedback: false,
     holdFeedback: null,
@@ -83,8 +95,18 @@ export function installServer(): Server {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://localhost");
       const method = init?.method ?? "GET";
+
+      if (method === "POST" && url.href === TOKEN_URL) {
+        const form = Object.fromEntries(new URLSearchParams(String(init?.body)));
+        server.tokenRequests.push(form);
+        if (server.failToken) return json({ error: "boom" }, 500);
+        return json({ access_token: `token-for-${form.username}`, token_type: "Bearer", expires_in: 3600 });
+      }
+
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-      server.calls.push({ method, url: url.pathname + url.search, body });
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization ?? null;
+      server.calls.push({ method, url: url.pathname + url.search, body, auth });
+      if (server.rejectToken && url.pathname.startsWith("/api/")) return json({ detail: "missing or invalid bearer token" }, 401);
 
       if (method === "GET" && url.pathname === "/api/sessions") {
         if (server.failList) return json({ detail: "boom" }, 500);

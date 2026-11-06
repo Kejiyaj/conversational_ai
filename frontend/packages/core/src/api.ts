@@ -45,13 +45,29 @@ export type SessionsResponse = { sessions: SessionSummary[] };
 
 // The website keeps the relative path. The mobile app has no page origin, so it sets a full address.
 let baseUrl = "";
+let getToken: () => string | null = () => null;
+let onUnauthorized: () => void = () => {};
 
-export function configureApi(options: { baseUrl: string }): void {
-  baseUrl = options.baseUrl.replace(/\/$/, "");
+// Each option is optional; only the ones given are changed.
+export function configureApi(options: {
+  baseUrl?: string;
+  /** Supplies the access token, read on every request (spec 008). */
+  getToken?: () => string | null;
+  /** Called once on any 401, before the call throws (spec 008). */
+  onUnauthorized?: () => void;
+}): void {
+  if (options.baseUrl !== undefined) baseUrl = options.baseUrl.replace(/\/$/, "");
+  if (options.getToken) getToken = options.getToken;
+  if (options.onUnauthorized) onUnauthorized = options.onUnauthorized;
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(baseUrl + url, init);
+  const token = getToken();
+  const withAuth = token
+    ? { ...init, headers: { ...(init?.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` } }
+    : init;
+  const res = await fetch(baseUrl + url, withAuth);
+  if (res.status === 401) onUnauthorized();
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return (await res.json()) as T;
 }
