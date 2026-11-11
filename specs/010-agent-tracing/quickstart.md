@@ -210,7 +210,7 @@ Import [ops/dashboard.json](./ops/dashboard.json) or create the widgets manually
 
 ### Step 7 — Alarm definitions
 
-Create the four alarms from [ops/alarms.json](./ops/alarms.json):
+Create the four alarms from [ops/alarms.json](./ops/alarms.json) (after the metric filters in Step 8 exist; apply one entry at a time, for example `jq -c '.Alarms[0]' ops/alarms.json > /tmp/a.json && aws cloudwatch put-metric-alarm --cli-input-json file:///tmp/a.json`):
 
 | Alarm | Threshold | Window |
 |---|---|---|
